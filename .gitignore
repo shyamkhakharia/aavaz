@@ -1,0 +1,15 @@
+.DS_Store
+.build/
+.swiftpm/
+*.xcodeproj/
+xcuserdata/
+DerivedData/
+build/
+
+# Whisper build artifacts
+vendor/whisper-build/
+vendor/whisper-install/
+
+# Models
+*.bin
+*.mlmodelc
