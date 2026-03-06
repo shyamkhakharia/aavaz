@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aavaz — Voice to Text, Entirely on Your Mac</title>
+    <meta name="description" content="Push-to-talk transcription that lives in your menubar. Fully local, no cloud, no latency. Powered by whisper.cpp on Apple Silicon.">
+    <link rel="preconnect" href="https://rsms.me/">
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+    <style>
+        /* ─── Foundation ─── */
+        :root {
+            --accent: #6E6AE8;
+            --accent-light: #8B88EF;
+            --accent-glow: rgba(110, 106, 232, 0.15);
+            --accent-glow-strong: rgba(110, 106, 232, 0.3);
+            --bg: #0A0A0B;
+            --bg-card: #111113;
+            --bg-card-hover: #18181B;
+            --border: rgba(255, 255, 255, 0.06);
+            --border-hover: rgba(255, 255, 255, 0.1);
+            --text: #EDEDEF;
+            --text-secondary: #8B8B8E;
+            --text-tertiary: #56565A;
+            --radius: 16px;
+            --radius-sm: 10px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-feature-settings: 'liga' 1, 'calt' 1;
+            -webkit-font-smoothing: antialiased;
+            scroll-behavior: smooth;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            overflow-x: hidden;
+        }
+
+        /* ─── Layout ─── */
+        .container {
+            max-width: 1120px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        /* ─── Nav ─── */
+        nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            padding: 16px 0;
+            backdrop-filter: blur(20px) saturate(1.4);
+            -webkit-backdrop-filter: blur(20px) saturate(1.4);
+            background: rgba(10, 10, 11, 0.7);
+            border-bottom: 1px solid var(--border);
+        }
+
+        nav .container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 17px;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            color: var(--text);
+            text-decoration: none;
+        }
+
+        .logo-icon {
+            width: 28px;
+            height: 28px;
+            background: var(--accent);
+            border-radius: 7px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .logo-icon svg {
+            width: 16px;
+            height: 16px;
+            fill: white;
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 32px;
+        }
+
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 450;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover { color: var(--text); }
+
+        .btn-nav {
+            background: var(--accent);
+            color: white !important;
+            padding: 8px 18px;
+            border-radius: 8px;
+            font-weight: 500;
+            transition: background 0.2s, transform 0.15s;
+        }
+
+        .btn-nav:hover {
+            background: var(--accent-light) !important;
+            transform: translateY(-1px);
+        }
+
+        /* ─── Hero ─── */
+        .hero {
+            padding: 160px 0 100px;
+            text-align: center;
+            position: relative;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 600px;
+            height: 400px;
+            background: radial-gradient(ellipse, var(--accent-glow) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 14px 6px 8px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 100px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 32px;
+        }
+
+        .badge-dot {
+            width: 8px;
+            height: 8px;
+            background: #34D399;
+            border-radius: 50%;
+            animation: pulse-dot 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        h1 {
+            font-size: clamp(42px, 6vw, 68px);
+            font-weight: 650;
+            letter-spacing: -0.035em;
+            line-height: 1.05;
+            margin-bottom: 24px;
+            position: relative;
+        }
+
+        h1 .gradient {
+            background: linear-gradient(135deg, var(--accent-light), #A78BFA, var(--accent));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero-sub {
+            font-size: 18px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+            max-width: 520px;
+            margin: 0 auto 48px;
+            font-weight: 400;
+        }
+
+        .hero-actions {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            margin-bottom: 80px;
+        }
+
+        .btn-primary {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 14px 28px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 550;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.2s;
+            box-shadow: 0 0 0 1px rgba(110, 106, 232, 0.3), 0 4px 16px rgba(110, 106, 232, 0.2);
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-light);
+            transform: translateY(-2px);
+            box-shadow: 0 0 0 1px rgba(110, 106, 232, 0.4), 0 8px 24px rgba(110, 106, 232, 0.3);
+        }
+
+        .btn-secondary {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 14px 28px;
+            background: var(--bg-card);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg-card-hover);
+            border-color: var(--border-hover);
+            transform: translateY(-2px);
+        }
+
+        .btn-icon {
+            width: 18px;
+            height: 18px;
+        }
+
+        /* ─── Demo Visual ─── */
+        .hero-visual {
+            max-width: 720px;
+            margin: 0 auto;
+            position: relative;
+        }
+
+        .menubar-demo {
+            background: #1C1C1E;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+            box-shadow:
+                0 0 0 1px rgba(255,255,255,0.03),
+                0 20px 60px rgba(0,0,0,0.5),
+                0 0 80px var(--accent-glow);
+        }
+
+        .menubar-top {
+            background: #2C2C2E;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .menubar-dots {
+            display: flex;
+            gap: 8px;
+        }
+
+        .menubar-dots span {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .dot-red { background: #FF5F57; }
+        .dot-yellow { background: #FDBB2D; }
+        .dot-green { background: #27C93F; }
+
+        .menubar-title {
+            font-size: 13px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .menubar-body {
+            padding: 32px;
+        }
+
+        .demo-flow {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 24px;
+            flex-wrap: wrap;
+        }
+
+        .demo-step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .demo-icon-wrap {
+            width: 64px;
+            height: 64px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .demo-icon-wrap svg {
+            width: 28px;
+            height: 28px;
+            stroke: var(--accent-light);
+            fill: none;
+            stroke-width: 1.5;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .demo-label {
+            font-size: 13px;
+            color: var(--text-secondary);
+            font-weight: 450;
+        }
+
+        .demo-arrow {
+            color: var(--text-tertiary);
+            font-size: 20px;
+        }
+
+        .demo-key {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 6px 12px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 13px;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            color: var(--text-secondary);
+        }
+
+        /* ─── Features ─── */
+        .features {
+            padding: 80px 0;
+        }
+
+        .section-label {
+            text-align: center;
+            font-size: 13px;
+            font-weight: 550;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--accent-light);
+            margin-bottom: 16px;
+        }
+
+        .section-title {
+            text-align: center;
+            font-size: clamp(28px, 4vw, 40px);
+            font-weight: 650;
+            letter-spacing: -0.03em;
+            margin-bottom: 16px;
+        }
+
+        .section-sub {
+            text-align: center;
+            font-size: 16px;
+            color: var(--text-secondary);
+            max-width: 480px;
+            margin: 0 auto 64px;
+            line-height: 1.6;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+
+        .feature-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 32px 28px;
+            transition: all 0.3s;
+        }
+
+        .feature-card:hover {
+            border-color: var(--border-hover);
+            background: var(--bg-card-hover);
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+        }
+
+        .feature-icon {
+            width: 44px;
+            height: 44px;
+            background: var(--accent-glow-strong);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        .feature-icon svg {
+            width: 22px;
+            height: 22px;
+            stroke: var(--accent-light);
+            fill: none;
+            stroke-width: 1.5;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .feature-card h3 {
+            font-size: 16px;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            margin-bottom: 8px;
+        }
+
+        .feature-card p {
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+        }
+
+        /* ─── Profiles ─── */
+        .profiles {
+            padding: 80px 0;
+        }
+
+        .profiles-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+
+        .profile-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 32px 28px;
+            position: relative;
+            transition: all 0.3s;
+        }
+
+        .profile-card:hover {
+            border-color: var(--border-hover);
+            transform: translateY(-4px);
+        }
+
+        .profile-card.featured {
+            border-color: rgba(110, 106, 232, 0.3);
+            box-shadow: 0 0 40px var(--accent-glow);
+        }
+
+        .profile-badge {
+            position: absolute;
+            top: -10px;
+            right: 20px;
+            background: var(--accent);
+            color: white;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .profile-name {
+            font-size: 20px;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            margin-bottom: 4px;
+        }
+
+        .profile-model {
+            font-size: 14px;
+            color: var(--accent-light);
+            margin-bottom: 20px;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+        }
+
+        .profile-stats {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .profile-stat {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+        }
+
+        .profile-stat-label {
+            color: var(--text-secondary);
+        }
+
+        .profile-stat-value {
+            font-weight: 500;
+        }
+
+        /* ─── How It Works ─── */
+        .how-it-works {
+            padding: 80px 0;
+        }
+
+        .steps {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 40px;
+            counter-reset: step;
+        }
+
+        .step {
+            position: relative;
+        }
+
+        .step-number {
+            font-size: 48px;
+            font-weight: 700;
+            color: var(--accent-glow-strong);
+            letter-spacing: -0.04em;
+            margin-bottom: 12px;
+            color: rgba(110, 106, 232, 0.25);
+        }
+
+        .step h3 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            letter-spacing: -0.01em;
+        }
+
+        .step p {
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+        }
+
+        /* ─── CTA ─── */
+        .cta {
+            padding: 100px 0;
+            text-align: center;
+        }
+
+        .cta-box {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 80px 40px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .cta-box::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 400px;
+            height: 200px;
+            background: radial-gradient(ellipse, var(--accent-glow) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .cta-box h2 {
+            font-size: clamp(28px, 4vw, 40px);
+            font-weight: 650;
+            letter-spacing: -0.03em;
+            margin-bottom: 16px;
+            position: relative;
+        }
+
+        .cta-box p {
+            font-size: 16px;
+            color: var(--text-secondary);
+            margin-bottom: 36px;
+            position: relative;
+        }
+
+        .cta-box .hero-actions {
+            margin-bottom: 0;
+            position: relative;
+        }
+
+        /* ─── Footer ─── */
+        footer {
+            padding: 32px 0;
+            border-top: 1px solid var(--border);
+        }
+
+        footer .container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .footer-left {
+            font-size: 13px;
+            color: var(--text-tertiary);
+        }
+
+        .footer-links {
+            display: flex;
+            gap: 24px;
+        }
+
+        .footer-links a {
+            font-size: 13px;
+            color: var(--text-tertiary);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .footer-links a:hover { color: var(--text-secondary); }
+
+        /* ─── Responsive ─── */
+        @media (max-width: 768px) {
+            .features-grid,
+            .profiles-grid,
+            .steps {
+                grid-template-columns: 1fr;
+            }
+
+            .nav-links a:not(.btn-nav) {
+                display: none;
+            }
+
+            .hero { padding: 130px 0 60px; }
+
+            .hero-actions {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .demo-flow {
+                flex-direction: column;
+                gap: 16px;
+            }
+
+            .demo-arrow {
+                transform: rotate(90deg);
+            }
+
+            footer .container {
+                flex-direction: column;
+                gap: 16px;
+                text-align: center;
+            }
+
+            .cta-box { padding: 48px 24px; }
+        }
+
+        @media (max-width: 480px) {
+            .hero-sub { font-size: 16px; }
+        }
+
+        /* ─── Animations ─── */
+        @media (prefers-reduced-motion: no-preference) {
+            .feature-card, .profile-card, .step, .hero-visual {
+                opacity: 0;
+                transform: translateY(24px);
+                animation: fadeUp 0.6s ease forwards;
+            }
+
+            .hero-visual { animation-delay: 0.3s; }
+
+            .feature-card:nth-child(1) { animation-delay: 0.1s; }
+            .feature-card:nth-child(2) { animation-delay: 0.2s; }
+            .feature-card:nth-child(3) { animation-delay: 0.3s; }
+            .feature-card:nth-child(4) { animation-delay: 0.4s; }
+            .feature-card:nth-child(5) { animation-delay: 0.5s; }
+            .feature-card:nth-child(6) { animation-delay: 0.6s; }
+
+            .step:nth-child(1) { animation-delay: 0.1s; }
+            .step:nth-child(2) { animation-delay: 0.2s; }
+            .step:nth-child(3) { animation-delay: 0.3s; }
+        }
+
+        @keyframes fadeUp {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Nav -->
+<nav>
+    <div class="container">
+        <a href="#" class="logo">
+            <div class="logo-icon">
+                <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" fill="white" stroke="none"/><path d="M19 10v2a7 7 0 0 1-14 0v-2" stroke="white" stroke-width="2" fill="none" stroke-linecap="round"/><line x1="12" y1="19" x2="12" y2="23" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
+            </div>
+            Aavaz
+        </a>
+        <div class="nav-links">
+            <a href="#features">Features</a>
+            <a href="#profiles">Profiles</a>
+            <a href="#how-it-works">How It Works</a>
+            <a href="https://github.com/shyamkhakharia/aavaz" class="btn-nav">Download</a>
+        </div>
+    </div>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+    <div class="container">
+        <div class="badge">
+            <span class="badge-dot"></span>
+            100% local · Zero cloud dependency
+        </div>
+
+        <h1>
+            Voice to text,<br>
+            <span class="gradient">entirely on your Mac.</span>
+        </h1>
+
+        <p class="hero-sub">
+            Push-to-talk transcription that lives in your menubar.
+            Double-tap a key, speak, and your words appear at the cursor.
+            Private. Fast. No internet required.
+        </p>
+
+        <div class="hero-actions">
+            <a href="https://github.com/shyamkhakharia/aavaz" class="btn-primary">
+                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Download for Mac
+            </a>
+            <a href="https://github.com/shyamkhakharia/aavaz" class="btn-secondary">
+                <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+                View on GitHub
+            </a>
+        </div>
+
+        <div class="hero-visual">
+            <div class="menubar-demo">
+                <div class="menubar-top">
+                    <div class="menubar-dots">
+                        <span class="dot-red"></span>
+                        <span class="dot-yellow"></span>
+                        <span class="dot-green"></span>
+                    </div>
+                    <div class="menubar-title">Aavaz — Menubar</div>
+                    <div style="width: 52px;"></div>
+                </div>
+                <div class="menubar-body">
+                    <div class="demo-flow">
+                        <div class="demo-step">
+                            <div class="demo-icon-wrap">
+                                <svg viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/></svg>
+                            </div>
+                            <div class="demo-key">⌥ ⌥</div>
+                            <div class="demo-label">Double-tap</div>
+                        </div>
+                        <div class="demo-arrow">→</div>
+                        <div class="demo-step">
+                            <div class="demo-icon-wrap">
+                                <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+                            </div>
+                            <div class="demo-key">🔴 Recording</div>
+                            <div class="demo-label">Speak naturally</div>
+                        </div>
+                        <div class="demo-arrow">→</div>
+                        <div class="demo-step">
+                            <div class="demo-icon-wrap">
+                                <svg viewBox="0 0 24 24"><path d="M4 7V4a2 2 0 0 1 2-2h8.5L20 7.5V20a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-3"/><polyline points="14 2 14 8 20 8"/><line x1="2" y1="15" x2="12" y2="15"/></svg>
+                            </div>
+                            <div class="demo-key">⌨️ Injected</div>
+                            <div class="demo-label">Text at cursor</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Features -->
+<section class="features" id="features">
+    <div class="container">
+        <div class="section-label">Features</div>
+        <h2 class="section-title">Built for privacy-first workflows</h2>
+        <p class="section-sub">Every feature designed to keep your voice data on your machine and your transcription fast.</p>
+
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                </div>
+                <h3>Fully Local</h3>
+                <p>Your audio never leaves your Mac. No cloud APIs, no accounts, no data collection. Powered by whisper.cpp running natively on Apple Silicon.</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                </div>
+                <h3>Metal Accelerated</h3>
+                <p>Hardware-accelerated inference using Apple's Metal GPU framework. The tiny model transcribes in under a second on M-series chips.</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                </div>
+                <h3>Configurable Hotkey</h3>
+                <p>Double-tap Right Option by default. Customize the trigger key and timing window to match your workflow.</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                </div>
+                <h3>Cursor Injection</h3>
+                <p>Transcribed text is pasted directly at your cursor position in any application. Clipboard contents are preserved automatically.</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+                </div>
+                <h3>Three Profiles</h3>
+                <p>Switch between Fast, Balanced, and Quality modes. Each profile uses a different Whisper model sized for the task at hand.</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                </div>
+                <h3>Menubar Native</h3>
+                <p>Lives quietly in your menubar with no dock icon. Visual and audio feedback for recording state. Designed to stay out of your way.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Profiles -->
+<section class="profiles" id="profiles">
+    <div class="container">
+        <div class="section-label">Profiles</div>
+        <h2 class="section-title">Choose your speed</h2>
+        <p class="section-sub">Three built-in profiles tuned for different trade-offs between speed and accuracy.</p>
+
+        <div class="profiles-grid">
+            <div class="profile-card">
+                <div class="profile-name">Fast</div>
+                <div class="profile-model">ggml-tiny.en</div>
+                <div class="profile-stats">
+                    <div class="profile-stat">
+                        <span class="profile-stat-label">Model size</span>
+                        <span class="profile-stat-value">~75 MB</span>
+                    </div>
+                    <div class="profile-stat">
+                        <span class="profile-stat-label">Latency</span>
+                        <span class="profile-stat-value">< 1s</span>
+                    </div>
+                    <div class="profile-stat">
+                        <span class="profile-stat-label">Accuracy</span>
+                        <span class="profile-stat-value">Good</span>
+                    </div>
+                    <div class="profile-stat">
+                        <span class="profile-stat-label">Best for</span>
+                        <span class="profile-stat-value">Quick notes</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="profile-card featured">
+                <div class="profile-badge">Recommended</div>
+                <div class="profile-name">Balanced</div>
+                <div class="profile-model">ggml-base.en</div>
+                <div class="profile-stats">
+                    <div class="profile-stat">
+                        <span class="profile-stat-label">Model size</span>
+                        <span class="profile-stat-value">~142 MB</span>
+                    </div>
+                    <div class="profile-stat">
+                        <span class="profile-stat-label">Latency</span>
+                        <span class="profile-stat-value">~1-2s</span>
+                    </div>
+                    <div class="profile-stat">
+                        <span class="profile-stat-label">Accuracy</span>
+                        <span class="profile-stat-value">Great</span>
+                    </div>
+                    <div class="profile-stat">
+                        <span class="profile-stat-label">Best for</span>
+                        <span class="profile-stat-value">Daily use</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="profile-card">
+                <div class="profile-name">Quality</div>
+                <div class="profile-model">ggml-medium.en</div>
+                <div class="profile-stats">
+                    <div class="profile-stat">
+                        <span class="profile-stat-label">Model size</span>
+                        <span class="profile-stat-value">~1.5 GB</span>
+                    </div>
+                    <div class="profile-stat">
+                        <span class="profile-stat-label">Latency</span>
+                        <span class="profile-stat-value">~3-5s</span>
+                    </div>
+                    <div class="profile-stat">
+                        <span class="profile-stat-label">Accuracy</span>
+                        <span class="profile-stat-value">Excellent</span>
+                    </div>
+                    <div class="profile-stat">
+                        <span class="profile-stat-label">Best for</span>
+                        <span class="profile-stat-value">Long-form</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- How It Works -->
+<section class="how-it-works" id="how-it-works">
+    <div class="container">
+        <div class="section-label">Setup</div>
+        <h2 class="section-title">Up and running in two minutes</h2>
+        <p class="section-sub">No accounts. No API keys. Just build and go.</p>
+
+        <div class="steps">
+            <div class="step">
+                <div class="step-number">01</div>
+                <h3>Clone & build</h3>
+                <p>Clone the repo, run the whisper.cpp build script, then <code>swift build</code>. Or use the bundle script to get a proper .app.</p>
+            </div>
+            <div class="step">
+                <div class="step-number">02</div>
+                <h3>Download a model</h3>
+                <p>Open Aavaz from your menubar and click "Download Current Model." The tiny.en model is just 75 MB and downloads in seconds.</p>
+            </div>
+            <div class="step">
+                <div class="step-number">03</div>
+                <h3>Start talking</h3>
+                <p>Double-tap Right Option to start recording. Tap again to stop. Your transcription appears at the cursor instantly.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- CTA -->
+<section class="cta">
+    <div class="container">
+        <div class="cta-box">
+            <h2>Your voice, your machine,<br>your words.</h2>
+            <p>Open source and free. Built for people who care about privacy.</p>
+            <div class="hero-actions">
+                <a href="https://github.com/shyamkhakharia/aavaz" class="btn-primary">
+                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    Get Aavaz
+                </a>
+                <a href="https://github.com/shyamkhakharia/aavaz" class="btn-secondary">
+                    <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+                    Star on GitHub
+                </a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Footer -->
+<footer>
+    <div class="container">
+        <div class="footer-left">© 2026 Aavaz · MIT License</div>
+        <div class="footer-links">
+            <a href="https://github.com/shyamkhakharia/aavaz">GitHub</a>
+            <a href="https://github.com/shyamkhakharia/aavaz/issues">Issues</a>
+            <a href="https://github.com/shyamkhakharia/aavaz/blob/main/LICENSE">License</a>
+        </div>
+    </div>
+</footer>
+
+</body>
+</html>

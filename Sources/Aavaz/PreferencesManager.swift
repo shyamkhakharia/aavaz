@@ -27,7 +27,7 @@ struct Preferences: Codable, Sendable {
             Profile(name: "Quality", modelName: "medium.en", useVAD: false, initialPrompt: "", injectionDelay: 0.1, useCoreML: true),
         ],
         activeProfileIndex: 0,
-        triggerKeyCode: 61,
+        triggerKeyCode: 60,
         doubleTapWindow: 0.3,
         restoreClipboard: true
     )

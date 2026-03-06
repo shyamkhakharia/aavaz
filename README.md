@@ -21,7 +21,7 @@ swift build
 
 ## Usage
 
-Double-tap the Right Option key to start recording. Release to transcribe and paste at cursor.
+Double-tap Right Shift to start recording. Tap again to stop, transcribe, and paste at cursor. Configurable in Settings → Trigger Key.
 
 ## Profiles
 

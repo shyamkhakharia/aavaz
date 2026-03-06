@@ -18,6 +18,17 @@ final class AavazApp: NSObject, NSApplicationDelegate {
     // Menu items that need updating
     private var statusMenuItem: NSMenuItem?
     private var profileMenuItems: [NSMenuItem] = []
+    private var tapWindowMenuItems: [NSMenuItem] = []
+    private var triggerKeyMenuItem: NSMenuItem?
+    private let shortcutRecorder = ShortcutRecorder()
+
+    // Available tap windows
+    private let tapWindowOptions: [(String, TimeInterval)] = [
+        ("200ms (fast)", 0.2),
+        ("300ms (default)", 0.3),
+        ("400ms (relaxed)", 0.4),
+        ("500ms (slow)", 0.5),
+    ]
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         preferences = prefsManager.load()
@@ -66,6 +77,51 @@ final class AavazApp: NSObject, NSApplicationDelegate {
 
         menu.addItem(.separator())
 
+        // Settings submenu
+        let settingsItem = NSMenuItem(title: "Settings", action: nil, keyEquivalent: "")
+        let settingsMenu = NSMenu()
+
+        // Trigger key — press to record
+        let triggerLabel = ShortcutRecorder.keyName(for: preferences.triggerKeyCode)
+        let triggerItem = NSMenuItem(
+            title: "Trigger Key: \(triggerLabel)  ⌄",
+            action: #selector(openShortcutRecorder),
+            keyEquivalent: ""
+        )
+        triggerItem.target = self
+        settingsMenu.addItem(triggerItem)
+        triggerKeyMenuItem = triggerItem
+
+        // Tap window submenu
+        let tapItem = NSMenuItem(title: "Double-Tap Speed", action: nil, keyEquivalent: "")
+        let tapMenu = NSMenu()
+        for (index, (label, window)) in tapWindowOptions.enumerated() {
+            let item = NSMenuItem(title: label, action: #selector(selectTapWindow(_:)), keyEquivalent: "")
+            item.target = self
+            item.tag = index
+            item.state = abs(preferences.doubleTapWindow - window) < 0.01 ? .on : .off
+            tapMenu.addItem(item)
+            tapWindowMenuItems.append(item)
+        }
+        tapItem.submenu = tapMenu
+        settingsMenu.addItem(tapItem)
+
+        // Clipboard restore toggle
+        settingsMenu.addItem(.separator())
+        let clipboardItem = NSMenuItem(
+            title: "Restore Clipboard After Paste",
+            action: #selector(toggleClipboardRestore(_:)),
+            keyEquivalent: ""
+        )
+        clipboardItem.target = self
+        clipboardItem.state = preferences.restoreClipboard ? .on : .off
+        settingsMenu.addItem(clipboardItem)
+
+        settingsItem.submenu = settingsMenu
+        menu.addItem(settingsItem)
+
+        menu.addItem(.separator())
+
         // Download model
         let download = NSMenuItem(title: "Download Current Model…", action: #selector(downloadCurrentModel), keyEquivalent: "d")
         download.target = self
@@ -111,6 +167,8 @@ final class AavazApp: NSObject, NSApplicationDelegate {
         }
     }
 
+    // MARK: - Menu Actions
+
     @objc private func selectProfile(_ sender: NSMenuItem) {
         let index = sender.tag
         guard index >= 0, index < preferences.profiles.count else { return }
@@ -124,6 +182,42 @@ final class AavazApp: NSObject, NSApplicationDelegate {
 
         textInjector.injectionDelay = preferences.activeProfile.injectionDelay
         updateStatus("Profile: \(preferences.activeProfile.name)")
+    }
+
+    @objc private func openShortcutRecorder() {
+        // Temporarily stop the hotkey monitor so it doesn't interfere
+        hotkeyMonitor.stop()
+
+        shortcutRecorder.onKeyRecorded = { [weak self] keyCode, name in
+            guard let self else { return }
+            self.preferences.triggerKeyCode = keyCode
+            self.hotkeyMonitor.triggerKeyCode = keyCode
+            try? self.prefsManager.save(self.preferences)
+            self.triggerKeyMenuItem?.title = "Trigger Key: \(name)  ⌄"
+            self.hotkeyMonitor.start()
+        }
+        shortcutRecorder.show()
+    }
+
+    @objc private func selectTapWindow(_ sender: NSMenuItem) {
+        let index = sender.tag
+        guard index >= 0, index < tapWindowOptions.count else { return }
+
+        let (_, window) = tapWindowOptions[index]
+        preferences.doubleTapWindow = window
+        hotkeyMonitor.doubleTapWindow = window
+        try? prefsManager.save(preferences)
+
+        for (i, item) in tapWindowMenuItems.enumerated() {
+            item.state = i == index ? .on : .off
+        }
+    }
+
+    @objc private func toggleClipboardRestore(_ sender: NSMenuItem) {
+        preferences.restoreClipboard.toggle()
+        textInjector.restoreClipboard = preferences.restoreClipboard
+        sender.state = preferences.restoreClipboard ? .on : .off
+        try? prefsManager.save(preferences)
     }
 
     @objc private func downloadCurrentModel() {
@@ -144,12 +238,14 @@ final class AavazApp: NSObject, NSApplicationDelegate {
                         self?.updateStatus("Downloading… \(Int(progress * 100))%")
                     }
                 }
-                updateStatus("Download complete")
+                updateStatus("Download complete ✓")
             } catch {
                 updateStatus("Download failed: \(error.localizedDescription)")
             }
         }
     }
+
+    // MARK: - Recording
 
     private func toggleRecording() {
         if isRecording {
@@ -162,7 +258,6 @@ final class AavazApp: NSObject, NSApplicationDelegate {
     private func startRecording() {
         guard !isRecording, !isTranscribing else { return }
 
-        // Check model is available
         let profile = preferences.activeProfile
         guard let modelName = ModelManager.ModelName(rawValue: profile.modelName) else { return }
 

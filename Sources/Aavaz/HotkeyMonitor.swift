@@ -49,6 +49,18 @@ final class HotkeyMonitor {
         self.runLoopSource = source
     }
 
+    private static func modifierMask(for keyCode: UInt16) -> CGEventFlags {
+        switch keyCode {
+        case 56, 60:  return .maskShift        // Left/Right Shift
+        case 59, 62:  return .maskControl      // Left/Right Control
+        case 58, 61:  return .maskAlternate    // Left/Right Option
+        case 55, 54:  return .maskCommand      // Left/Right Command
+        case 57:      return .maskAlphaShift   // Caps Lock
+        case 63:      return .maskSecondaryFn  // Fn/Globe
+        default:      return CGEventFlags(rawValue: 0)
+        }
+    }
+
     func stop() {
         if let tap = eventTap {
             CGEvent.tapEnable(tap: tap, enable: false)
@@ -68,10 +80,11 @@ final class HotkeyMonitor {
             return
         }
 
-        // For modifier keys (like Right Option), use flagsChanged
+        // For modifier keys, use flagsChanged and check the appropriate mask
         let isKeyDown: Bool
         if eventType == .flagsChanged {
-            isKeyDown = flags.contains(.maskAlternate)
+            let mask = Self.modifierMask(for: keyCode)
+            isKeyDown = flags.contains(mask)
         } else {
             isKeyDown = eventType == .keyDown
         }
