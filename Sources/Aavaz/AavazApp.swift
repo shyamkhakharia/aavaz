@@ -108,7 +108,7 @@ final class AavazApp: NSObject, NSApplicationDelegate {
 
         for (index, profile) in preferences.profiles.enumerated() {
             let item = NSMenuItem(
-                title: "  \(profile.name) (\(profile.modelName))",
+                title: "  \(profile.name)",
                 action: #selector(selectProfile(_:)),
                 keyEquivalent: ""
             )
