@@ -14,6 +14,7 @@ final class AavazApp: NSObject, NSApplicationDelegate {
     private var preferences: Preferences = .default
     private var isRecording = false
     private var isTranscribing = false
+    private var transcribeAnimationTimer: Timer?
 
     // Menu items that need updating
     private var statusMenuItem: NSMenuItem?
@@ -45,7 +46,7 @@ final class AavazApp: NSObject, NSApplicationDelegate {
 
     private func setupMenuBar() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        updateStatusIcon(recording: false)
+        setIconState(.idle)
 
         let menu = NSMenu()
 
@@ -136,17 +137,65 @@ final class AavazApp: NSObject, NSApplicationDelegate {
         statusItem?.menu = menu
     }
 
-    private func updateStatusIcon(recording: Bool) {
+    private enum IconState {
+        case idle
+        case recording
+        case transcribing
+    }
+
+    private func setIconState(_ state: IconState) {
+        stopTranscribeAnimation()
         guard let button = statusItem?.button else { return }
-        let symbolName = recording ? "mic.fill" : "mic"
-        let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: "Aavaz")
-        image?.isTemplate = !recording
-        if recording {
-            button.contentTintColor = .systemRed
-        } else {
+
+        switch state {
+        case .idle:
+            let image = NSImage(systemSymbolName: "mic", accessibilityDescription: "Aavaz")
+            image?.isTemplate = true
             button.contentTintColor = nil
+            button.image = image
+
+        case .recording:
+            let image = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "Recording")
+            image?.isTemplate = false
+            button.contentTintColor = .systemRed
+            button.image = image
+
+        case .transcribing:
+            startTranscribeAnimation()
         }
-        button.image = image
+    }
+
+    private var transcribeFrameIndex = 0
+    private let transcribeFrames = ["ellipsis", "ellipsis.circle", "text.bubble", "ellipsis.circle"]
+
+    private func startTranscribeAnimation() {
+        guard let button = statusItem?.button else { return }
+        transcribeFrameIndex = 0
+
+        let img = NSImage(systemSymbolName: "ellipsis.circle", accessibilityDescription: "Transcribing")
+        img?.isTemplate = false
+        button.contentTintColor = .systemOrange
+        button.image = img
+
+        transcribeAnimationTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.advanceTranscribeFrame()
+            }
+        }
+    }
+
+    private func advanceTranscribeFrame() {
+        guard let button = statusItem?.button else { return }
+        transcribeFrameIndex = (transcribeFrameIndex + 1) % transcribeFrames.count
+        let frame = NSImage(systemSymbolName: transcribeFrames[transcribeFrameIndex], accessibilityDescription: "Transcribing")
+        frame?.isTemplate = false
+        button.contentTintColor = .systemOrange
+        button.image = frame
+    }
+
+    private func stopTranscribeAnimation() {
+        transcribeAnimationTimer?.invalidate()
+        transcribeAnimationTimer = nil
     }
 
     private func updateStatus(_ text: String) {
@@ -270,7 +319,7 @@ final class AavazApp: NSObject, NSApplicationDelegate {
         do {
             try audioRecorder.startRecording()
             isRecording = true
-            updateStatusIcon(recording: true)
+            setIconState(.recording)
             updateStatus("Recording…")
             playSound("Tink")
         } catch {
@@ -284,7 +333,7 @@ final class AavazApp: NSObject, NSApplicationDelegate {
 
         let audioBuffer = audioRecorder.stopRecording()
         isRecording = false
-        updateStatusIcon(recording: false)
+        setIconState(.idle)
         playSound("Pop")
 
         guard !audioBuffer.isEmpty else {
@@ -293,6 +342,7 @@ final class AavazApp: NSObject, NSApplicationDelegate {
         }
 
         isTranscribing = true
+        setIconState(.transcribing)
         updateStatus("Transcribing…")
 
         let profile = preferences.activeProfile
@@ -315,6 +365,7 @@ final class AavazApp: NSObject, NSApplicationDelegate {
 
                 await MainActor.run {
                     self.isTranscribing = false
+                    self.setIconState(.idle)
                     if text.isEmpty {
                         self.updateStatus("No speech detected")
                     } else {
@@ -327,6 +378,7 @@ final class AavazApp: NSObject, NSApplicationDelegate {
             } catch {
                 await MainActor.run {
                     self.isTranscribing = false
+                    self.setIconState(.idle)
                     self.updateStatus("Error: \(error.localizedDescription)")
                 }
             }
@@ -337,7 +389,7 @@ final class AavazApp: NSObject, NSApplicationDelegate {
         guard isRecording else { return }
         _ = audioRecorder.stopRecording()
         isRecording = false
-        updateStatusIcon(recording: false)
+        setIconState(.idle)
         updateStatus("Cancelled")
         playSound("Funk")
     }

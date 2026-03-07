@@ -17,9 +17,14 @@ final class DoubleTapDetector: Sendable {
     nonisolated(unsafe) var config = Config()
 
     func handleKeyEvent(keyCode: UInt16, isKeyDown: Bool, timestamp: TimeInterval) -> Bool {
+        // Ignore events for keys we don't care about
         guard keyCode == config.triggerKeyCode else {
-            reset()
             return false
+        }
+
+        // Auto-expire stale states based on timestamp
+        if state != .idle && (timestamp - lastTapTime) > config.doubleTapWindow * 2 {
+            state = .idle
         }
 
         switch state {
@@ -39,6 +44,7 @@ final class DoubleTapDetector: Sendable {
                     reset()
                     return true  // Double tap detected
                 } else {
+                    // Too slow, treat as new first tap
                     state = .firstTap
                     lastTapTime = timestamp
                 }
