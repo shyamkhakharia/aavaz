@@ -45,23 +45,10 @@ final class AavazApp: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Only prompts for permissions that haven't been granted yet.
+    /// Only prompts for permissions not yet granted. Never double-prompts.
     private func ensurePermissionsOnce() async {
-        // Mic: only request if not yet determined
-        let micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
-        if micStatus == .notDetermined {
-            let granted = await AudioRecorder.requestMicrophoneAccess()
-            if !granted {
-                print("[Aavaz] Microphone permission denied")
-            }
-        } else if micStatus == .denied || micStatus == .restricted {
-            print("[Aavaz] Microphone permission not granted (status=\(micStatus.rawValue))")
-        }
-
-        // Accessibility: only prompt if not already trusted
-        if !permissionManager.checkAccessibilityPermission() {
-            permissionManager.promptAccessibilityPermission()
-        }
+        await permissionManager.requestMicrophoneIfNeeded()
+        permissionManager.promptAccessibilityIfNeeded()
     }
 
     /// Auto-download tiny.en and base.en on first launch. Warn for medium.en.
