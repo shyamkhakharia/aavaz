@@ -32,7 +32,7 @@ final class HotkeyMonitor {
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
-            options: .defaultTap,
+            options: .listenOnly,
             eventsOfInterest: eventMask,
             callback: hotkeyCallback,
             userInfo: context
@@ -58,6 +58,12 @@ final class HotkeyMonitor {
         case 57:      return .maskAlphaShift   // Caps Lock
         case 63:      return .maskSecondaryFn  // Fn/Globe
         default:      return CGEventFlags(rawValue: 0)
+        }
+    }
+
+    fileprivate func reEnableTap() {
+        if let tap = eventTap {
+            CGEvent.tapEnable(tap: tap, enable: true)
         }
     }
 
@@ -107,9 +113,14 @@ private func hotkeyCallback(
     event: CGEvent,
     userInfo: UnsafeMutableRawPointer?
 ) -> Unmanaged<CGEvent>? {
-    // Handle tap disabled events
+    // Re-enable the tap if macOS disabled it
     if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-        // Re-enable
+        if let userInfo {
+            let monitor = Unmanaged<HotkeyMonitor>.fromOpaque(userInfo).takeUnretainedValue()
+            MainActor.assumeIsolated {
+                monitor.reEnableTap()
+            }
+        }
         return Unmanaged.passUnretained(event)
     }
 
