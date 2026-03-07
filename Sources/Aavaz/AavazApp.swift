@@ -198,9 +198,11 @@ final class AavazApp: NSObject, NSApplicationDelegate {
             button.image = MenuBarIcon.idle()
 
         case .recording:
+            button.contentTintColor = MenuBarIcon.accentColor
             button.image = MenuBarIcon.recording()
 
         case .transcribing:
+            button.contentTintColor = .systemOrange
             startTranscribeAnimation()
         }
     }
