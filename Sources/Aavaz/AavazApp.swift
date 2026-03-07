@@ -382,6 +382,8 @@ final class AavazApp: NSObject, NSApplicationDelegate {
         setIconState(.idle)
         playSound("Pop")
 
+        print("[Aavaz] stopRecording: got \(audioBuffer.count) samples (\(String(format: "%.1f", Double(audioBuffer.count) / 16000.0))s of audio)")
+
         guard !audioBuffer.isEmpty else {
             updateStatus("No audio recorded")
             return
@@ -395,6 +397,7 @@ final class AavazApp: NSObject, NSApplicationDelegate {
         let modelPath = modelManager.modelPath(
             for: ModelManager.ModelName(rawValue: profile.modelName)!
         ).path
+        print("[Aavaz] transcribing with model: \(modelPath)")
 
         Task.detached { [weak self] in
             guard let self else { return }
@@ -408,6 +411,7 @@ final class AavazApp: NSObject, NSApplicationDelegate {
 
             do {
                 let text = try self.transcriber.transcribe(audioBuffer: audioBuffer, config: config)
+                print("[Aavaz] transcription result: \"\(text)\"")
 
                 await MainActor.run {
                     self.isTranscribing = false
@@ -416,12 +420,15 @@ final class AavazApp: NSObject, NSApplicationDelegate {
                         self.updateStatus("No speech detected")
                     } else {
                         self.updateStatus("Ready")
+                        print("[Aavaz] injecting text…")
                         Task {
                             await self.textInjector.inject(text: text)
+                            print("[Aavaz] text injected")
                         }
                     }
                 }
             } catch {
+                print("[Aavaz] transcription error: \(error)")
                 await MainActor.run {
                     self.isTranscribing = false
                     self.setIconState(.idle)
