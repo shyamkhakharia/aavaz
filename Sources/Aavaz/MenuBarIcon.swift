@@ -1,46 +1,41 @@
 import AppKit
 
-/// Draws the Aavaz logo — a stylized "A" with sound wave arcs — for the menubar.
+/// Draws the Aavaz menubar icon — the Devanagari आ rendered from a
+/// proper system font, with sound wave arcs for active states.
 enum MenuBarIcon {
-    static let size = NSSize(width: 18, height: 18)
+    static let size = NSSize(width: 20, height: 18)
 
-    /// Idle: template image (macOS handles light/dark tinting).
+    /// Brand accent color matching the website (#6E6AE8).
+    static let accentColor = NSColor(red: 0x6E / 255.0, green: 0x6A / 255.0, blue: 0xE8 / 255.0, alpha: 1.0)
+
     static func idle() -> NSImage {
         let image = NSImage(size: size, flipped: false) { rect in
-            NSColor.black.setStroke()
-            drawA(in: rect)
-            drawWaves(in: rect, color: .black, phase: 1.0)
+            drawAa(in: rect, color: .black)
             return true
         }
         image.isTemplate = true
         return image
     }
 
-    /// Recording: red logo.
     static func recording() -> NSImage {
         let image = NSImage(size: size, flipped: false) { rect in
-            let color = NSColor.systemRed
-            color.setStroke()
-            drawA(in: rect)
-            drawWaves(in: rect, color: color, phase: 1.0)
+            drawAa(in: rect, color: accentColor)
+            drawWaves(in: rect, color: accentColor, phase: 1.0)
             return true
         }
         image.isTemplate = false
         return image
     }
 
-    /// Transcribing animation: pulsing orange waves. `frame` cycles 0..<frameCount
     static let frameCount = 4
 
     static func transcribing(frame: Int) -> NSImage {
         let phases: [CGFloat] = [0.3, 0.6, 1.0, 0.6]
         let phase = phases[frame % phases.count]
-        let color = NSColor.systemOrange
 
         let image = NSImage(size: size, flipped: false) { rect in
-            color.setStroke()
-            drawA(in: rect)
-            drawWaves(in: rect, color: color, phase: phase)
+            drawAa(in: rect, color: .systemOrange)
+            drawWaves(in: rect, color: .systemOrange, phase: phase)
             return true
         }
         image.isTemplate = false
@@ -49,55 +44,55 @@ enum MenuBarIcon {
 
     // MARK: - Drawing
 
-    private static func drawA(in rect: NSRect) {
-        let path = NSBezierPath()
-        path.lineWidth = 1.5
-        path.lineCapStyle = .round
-        path.lineJoinStyle = .round
+    private static func drawAa(in rect: NSRect, color: NSColor) {
+        let fontSize: CGFloat = 15.0
+        let font = NSFont(name: "DevanagariSangamMN-Bold", size: fontSize)
+            ?? NSFont(name: "DevanagariSangamMN", size: fontSize)
+            ?? NSFont.systemFont(ofSize: fontSize)
 
-        // "A" — offset left to make room for waves
-        let apex = NSPoint(x: 7, y: rect.maxY - 2.5)
-        let leftFoot = NSPoint(x: 3.5, y: rect.minY + 2.5)
-        let rightFoot = NSPoint(x: 10.5, y: rect.minY + 2.5)
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: color,
+        ]
 
-        path.move(to: leftFoot)
-        path.line(to: apex)
-        path.line(to: rightFoot)
+        let str = NSAttributedString(string: "आ", attributes: attrs)
+        let textSize = str.size()
 
-        // Crossbar
-        let crossY: CGFloat = rect.minY + 5.5
-        path.move(to: NSPoint(x: 5.0, y: crossY))
-        path.line(to: NSPoint(x: 9.0, y: crossY))
+        // Position: left-aligned with some padding, leave right side for waves
+        let x = max(0, (rect.width - 6 - textSize.width) / 2.0)
+        let y = (rect.height - textSize.height) / 2.0
 
-        path.stroke()
+        str.draw(at: NSPoint(x: x, y: y))
     }
 
     private static func drawWaves(in rect: NSRect, color: NSColor, phase: CGFloat) {
         let cy = rect.midY
+        let baseX = rect.width - 5.5
 
-        // Inner arc
         let wave1 = NSBezierPath()
-        wave1.lineWidth = 1.3
+        wave1.lineWidth = 1.2
         wave1.lineCapStyle = .round
-        let x1: CGFloat = 12.0
-        wave1.move(to: NSPoint(x: x1, y: cy - 3.0 * phase))
-        wave1.curve(to: NSPoint(x: x1, y: cy + 3.0 * phase),
-                     controlPoint1: NSPoint(x: x1 + 2.5 * phase, y: cy - 1.5 * phase),
-                     controlPoint2: NSPoint(x: x1 + 2.5 * phase, y: cy + 1.5 * phase))
+        wave1.move(to: NSPoint(x: baseX, y: cy - 2.5 * phase))
+        wave1.curve(
+            to: NSPoint(x: baseX, y: cy + 2.5 * phase),
+            controlPoint1: NSPoint(x: baseX + 2.0 * phase, y: cy - 1.2 * phase),
+            controlPoint2: NSPoint(x: baseX + 2.0 * phase, y: cy + 1.2 * phase)
+        )
         color.setStroke()
         wave1.stroke()
 
-        // Outer arc — fades in with phase
         guard phase > 0.4 else { return }
-        let outerAlpha = (phase - 0.3) / 0.7 * 0.6
+        let outerAlpha = (phase - 0.3) / 0.7 * 0.5
         let wave2 = NSBezierPath()
-        wave2.lineWidth = 1.1
+        wave2.lineWidth = 1.0
         wave2.lineCapStyle = .round
-        let x2: CGFloat = 14.5
-        wave2.move(to: NSPoint(x: x2, y: cy - 4.5 * phase))
-        wave2.curve(to: NSPoint(x: x2, y: cy + 4.5 * phase),
-                     controlPoint1: NSPoint(x: x2 + 3.0 * phase, y: cy - 2.5 * phase),
-                     controlPoint2: NSPoint(x: x2 + 3.0 * phase, y: cy + 2.5 * phase))
+        let x2 = baseX + 2.0
+        wave2.move(to: NSPoint(x: x2, y: cy - 3.8 * phase))
+        wave2.curve(
+            to: NSPoint(x: x2, y: cy + 3.8 * phase),
+            controlPoint1: NSPoint(x: x2 + 2.5 * phase, y: cy - 2.0 * phase),
+            controlPoint2: NSPoint(x: x2 + 2.5 * phase, y: cy + 2.0 * phase)
+        )
         color.withAlphaComponent(outerAlpha).setStroke()
         wave2.stroke()
     }
