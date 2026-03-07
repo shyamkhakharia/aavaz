@@ -15,47 +15,43 @@ enum AudioRecorderError: Error, LocalizedError {
     }
 }
 
-@MainActor
-final class AudioRecorder {
-    private var audioEngine: AVAudioEngine?
-    private var audioBuffer: [Float] = []
-    private(set) var isRecording = false
+/// Collects audio samples from the tap callback on the audio thread.
+/// NOT MainActor-isolated so the tap closure doesn't trigger runtime executor checks.
+final class AudioBufferCollector: @unchecked Sendable {
+    private let lock = NSLock()
+    private var samples: [Float] = []
 
-    static let sampleRate: Double = 16000
-    static let channelCount: UInt32 = 1
+    func append(_ newSamples: [Float]) {
+        lock.lock()
+        samples.append(contentsOf: newSamples)
+        lock.unlock()
+    }
 
-    func startRecording() throws {
-        guard !isRecording else { return }
+    func drain() -> [Float] {
+        lock.lock()
+        let result = samples
+        samples.removeAll()
+        lock.unlock()
+        return result
+    }
 
-        // Check microphone permission first
-        let authStatus = AVCaptureDevice.authorizationStatus(for: .audio)
-        guard authStatus == .authorized else {
-            throw AudioRecorderError.noMicrophonePermission
-        }
+    func clear() {
+        lock.lock()
+        samples.removeAll(keepingCapacity: true)
+        lock.unlock()
+    }
+}
 
-        audioBuffer.removeAll(keepingCapacity: true)
-
-        let engine = AVAudioEngine()
-
-        // Accessing inputNode can crash if no input device — check first
-        guard engine.inputNode.inputFormat(forBus: 0).channelCount > 0 else {
-            throw AudioRecorderError.noInputDevice
-        }
-
-        let inputNode = engine.inputNode
-
-        guard let desiredFormat = AVAudioFormat(
-            commonFormat: .pcmFormatFloat32,
-            sampleRate: Self.sampleRate,
-            channels: AVAudioChannelCount(Self.channelCount),
-            interleaved: false
-        ) else {
-            throw AudioRecorderError.formatError
-        }
-
-        let hwFormat = inputNode.outputFormat(forBus: 0)
-
-        inputNode.installTap(onBus: 0, bufferSize: 4096, format: hwFormat) { [weak self] buffer, _ in
+/// Installs the audio tap outside of any actor context so Swift 6 doesn't
+/// insert a MainActor executor check in the tap callback.
+private enum AudioTapInstaller {
+    nonisolated static func installTap(
+        on inputNode: AVAudioInputNode,
+        hwFormat: AVAudioFormat,
+        desiredFormat: AVAudioFormat,
+        collector: AudioBufferCollector
+    ) {
+        inputNode.installTap(onBus: 0, bufferSize: 4096, format: hwFormat) { buffer, _ in
             let pcmBuffer: AVAudioPCMBuffer
             if hwFormat.sampleRate != AudioRecorder.sampleRate || hwFormat.channelCount != AudioRecorder.channelCount {
                 guard let converter = AVAudioConverter(from: hwFormat, to: desiredFormat) else { return }
@@ -87,10 +83,57 @@ final class AudioRecorder {
             let frames = Int(pcmBuffer.frameLength)
             let samples = Array(UnsafeBufferPointer(start: channelData[0], count: frames))
 
-            DispatchQueue.main.async {
-                self?.audioBuffer.append(contentsOf: samples)
-            }
+            collector.append(samples)
         }
+    }
+}
+
+@MainActor
+final class AudioRecorder {
+    private var audioEngine: AVAudioEngine?
+    private let collector = AudioBufferCollector()
+    private(set) var isRecording = false
+
+    static let sampleRate: Double = 16000
+    static let channelCount: UInt32 = 1
+
+    func startRecording() throws {
+        guard !isRecording else { return }
+
+        // Check microphone permission first
+        let authStatus = AVCaptureDevice.authorizationStatus(for: .audio)
+        guard authStatus == .authorized else {
+            throw AudioRecorderError.noMicrophonePermission
+        }
+
+        collector.clear()
+
+        let engine = AVAudioEngine()
+
+        // Accessing inputNode can crash if no input device — check first
+        guard engine.inputNode.inputFormat(forBus: 0).channelCount > 0 else {
+            throw AudioRecorderError.noInputDevice
+        }
+
+        let inputNode = engine.inputNode
+
+        guard let desiredFormat = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: Self.sampleRate,
+            channels: AVAudioChannelCount(Self.channelCount),
+            interleaved: false
+        ) else {
+            throw AudioRecorderError.formatError
+        }
+
+        let hwFormat = inputNode.outputFormat(forBus: 0)
+
+        AudioTapInstaller.installTap(
+            on: inputNode,
+            hwFormat: hwFormat,
+            desiredFormat: desiredFormat,
+            collector: collector
+        )
 
         engine.prepare()
         try engine.start()
@@ -107,9 +150,7 @@ final class AudioRecorder {
         audioEngine = nil
         isRecording = false
 
-        let result = audioBuffer
-        audioBuffer.removeAll()
-        return result
+        return collector.drain()
     }
 
     static func requestMicrophoneAccess() async -> Bool {
