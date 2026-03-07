@@ -37,18 +37,11 @@ final class AavazApp: NSObject, NSApplicationDelegate {
         setupMenuBar()
         configureFromPreferences()
 
-        // Check permissions without re-prompting if already granted
+        hotkeyMonitor.start()
+
         Task {
-            await ensurePermissionsOnce()
-            hotkeyMonitor.start()
             await autoDownloadModels()
         }
-    }
-
-    /// Only prompts for permissions not yet granted. Never double-prompts.
-    private func ensurePermissionsOnce() async {
-        await permissionManager.requestMicrophoneIfNeeded()
-        permissionManager.promptAccessibilityIfNeeded()
     }
 
     /// Auto-download tiny.en and base.en on first launch. Warn for medium.en.
@@ -449,11 +442,16 @@ final class AavazApp: NSObject, NSApplicationDelegate {
                     if text.isEmpty {
                         self.updateStatus("No speech detected")
                     } else {
-                        self.updateStatus("Ready")
                         print("[Aavaz] injecting text…")
                         Task {
-                            await self.textInjector.inject(text: text)
-                            print("[Aavaz] text injected")
+                            let injected = await self.textInjector.inject(text: text)
+                            if injected {
+                                self.updateStatus("Ready")
+                                print("[Aavaz] text injected")
+                            } else {
+                                self.updateStatus("Grant Accessibility in System Settings")
+                                self.permissionManager.promptAccessibilityIfNeeded()
+                            }
                         }
                     }
                 }

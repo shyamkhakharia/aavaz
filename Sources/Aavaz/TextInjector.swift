@@ -6,7 +6,8 @@ final class TextInjector {
     var injectionDelay: TimeInterval = 0.1
     var restoreClipboard: Bool = true
 
-    func inject(text: String) async {
+    /// Returns true if text was injected, false if accessibility permission is missing.
+    func inject(text: String) async -> Bool {
         let pasteboard = NSPasteboard.general
 
         // Save current clipboard
@@ -33,23 +34,33 @@ final class TextInjector {
         try? await Task.sleep(for: .milliseconds(Int(injectionDelay * 1000)))
 
         // Simulate Cmd+V
-        simulatePaste()
+        let pasted = simulatePaste()
 
         // Restore clipboard after a short delay
-        if restoreClipboard, let savedItems {
+        if pasted, restoreClipboard, let savedItems {
             try? await Task.sleep(for: .milliseconds(200))
             pasteboard.clearContents()
             pasteboard.writeObjects(savedItems)
         }
+
+        return pasted
     }
 
-    private func simulatePaste() {
+    /// Returns false if accessibility permission is missing.
+    private func simulatePaste() -> Bool {
+        // Check accessibility — CGEvent.post silently fails without it
+        let trusted = AXIsProcessTrustedWithOptions(nil)
+        if !trusted {
+            print("[Aavaz] Accessibility permission not granted — can't simulate paste")
+            return false
+        }
+
         let source = CGEventSource(stateID: .hidSystemState)
 
         // Key code 9 = 'v'
         guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: true),
               let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: false) else {
-            return
+            return false
         }
 
         keyDown.flags = .maskCommand
@@ -57,5 +68,6 @@ final class TextInjector {
 
         keyDown.post(tap: .cghidEventTap)
         keyUp.post(tap: .cghidEventTap)
+        return true
     }
 }
