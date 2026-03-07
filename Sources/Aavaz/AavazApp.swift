@@ -1,4 +1,5 @@
 import AppKit
+@preconcurrency import AVFoundation
 
 @MainActor
 final class AavazApp: NSObject, NSApplicationDelegate {
@@ -314,26 +315,62 @@ final class AavazApp: NSObject, NSApplicationDelegate {
     }
 
     private func startRecording() {
-        guard !isRecording, !isTranscribing else { return }
-
-        let profile = preferences.activeProfile
-        guard let modelName = ModelManager.ModelName(rawValue: profile.modelName) else { return }
-
-        if !modelManager.isModelDownloaded(modelName) {
-            updateStatus("Model not downloaded")
-            playSound("Basso")
+        guard !isRecording, !isTranscribing else {
+            print("[Aavaz] startRecording: already recording or transcribing")
             return
         }
 
+        let profile = preferences.activeProfile
+        guard let modelName = ModelManager.ModelName(rawValue: profile.modelName) else {
+            print("[Aavaz] startRecording: invalid model name")
+            return
+        }
+
+        if !modelManager.isModelDownloaded(modelName) {
+            updateStatus("Model not downloaded — click Download Current Model…")
+            playSound("Basso")
+            print("[Aavaz] startRecording: model not downloaded")
+            return
+        }
+
+        // Check mic permission BEFORE touching AVAudioEngine
+        let micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
+        print("[Aavaz] startRecording: mic permission status = \(micStatus.rawValue)")
+
+        switch micStatus {
+        case .authorized:
+            doStartRecording()
+        case .notDetermined:
+            // Request permission, then start recording
+            updateStatus("Requesting mic permission…")
+            Task {
+                let granted = await AudioRecorder.requestMicrophoneAccess()
+                if granted {
+                    doStartRecording()
+                } else {
+                    updateStatus("Microphone permission denied")
+                    playSound("Basso")
+                }
+            }
+        default:
+            updateStatus("Microphone permission denied — check System Settings")
+            playSound("Basso")
+        }
+    }
+
+    private func doStartRecording() {
+        print("[Aavaz] doStartRecording: starting AVAudioEngine…")
         do {
             try audioRecorder.startRecording()
             isRecording = true
             setIconState(.recording)
             updateStatus("Recording…")
             playSound("Tink")
+            print("[Aavaz] doStartRecording: recording started")
         } catch {
             updateStatus("Recording failed: \(error.localizedDescription)")
             playSound("Basso")
+            print("[Aavaz] doStartRecording: error = \(error)")
         }
     }
 
