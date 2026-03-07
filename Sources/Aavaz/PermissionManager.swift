@@ -3,8 +3,8 @@ import AppKit
 
 @MainActor
 final class PermissionManager {
-    /// Track whether we've already shown the accessibility alert this session.
-    private var hasShownAccessibilityAlert = false
+    /// Key for persisting whether we've shown the accessibility alert.
+    private static let accessibilityAlertShownKey = "accessibilityAlertShown"
 
     func isMicrophoneAuthorized() -> Bool {
         AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
@@ -27,8 +27,9 @@ final class PermissionManager {
     }
 
     func promptAccessibilityIfNeeded() {
-        guard !isAccessibilityTrusted(), !hasShownAccessibilityAlert else { return }
-        hasShownAccessibilityAlert = true
+        guard !isAccessibilityTrusted() else { return }
+        guard !UserDefaults.standard.bool(forKey: Self.accessibilityAlertShownKey) else { return }
+        UserDefaults.standard.set(true, forKey: Self.accessibilityAlertShownKey)
 
         let alert = NSAlert()
         alert.messageText = "Accessibility Permission Required"
