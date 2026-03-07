@@ -169,7 +169,7 @@ final class AavazApp: NSObject, NSApplicationDelegate {
     }
 
     private func setIconState(_ state: IconState) {
-        stopTranscribeAnimation()
+        stopAnimation()
         guard let button = statusItem?.button else { return }
         button.contentTintColor = nil
 
@@ -178,36 +178,44 @@ final class AavazApp: NSObject, NSApplicationDelegate {
             button.image = MenuBarIcon.idle()
 
         case .recording:
-            button.contentTintColor = MenuBarIcon.accentColor
-            button.image = MenuBarIcon.recording()
+            startRecordingAnimation()
 
         case .transcribing:
-            button.contentTintColor = .systemOrange
             startTranscribeAnimation()
         }
     }
 
-    private var transcribeFrameIndex = 0
+    private var animationFrameIndex = 0
 
-    private func startTranscribeAnimation() {
+    private func startRecordingAnimation() {
         guard let button = statusItem?.button else { return }
-        transcribeFrameIndex = 0
-        button.image = MenuBarIcon.transcribing(frame: 0)
+        animationFrameIndex = 0
+        button.image = MenuBarIcon.recording(frame: 0)
 
-        transcribeAnimationTimer = Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { [weak self] _ in
+        transcribeAnimationTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
-                self?.advanceTranscribeFrame()
+                guard let self, let button = self.statusItem?.button else { return }
+                self.animationFrameIndex = (self.animationFrameIndex + 1) % MenuBarIcon.recordingFrameCount
+                button.image = MenuBarIcon.recording(frame: self.animationFrameIndex)
             }
         }
     }
 
-    private func advanceTranscribeFrame() {
+    private func startTranscribeAnimation() {
         guard let button = statusItem?.button else { return }
-        transcribeFrameIndex = (transcribeFrameIndex + 1) % MenuBarIcon.frameCount
-        button.image = MenuBarIcon.transcribing(frame: transcribeFrameIndex)
+        animationFrameIndex = 0
+        button.image = MenuBarIcon.transcribing(frame: 0)
+
+        transcribeAnimationTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, let button = self.statusItem?.button else { return }
+                self.animationFrameIndex = (self.animationFrameIndex + 1) % MenuBarIcon.transcribingFrameCount
+                button.image = MenuBarIcon.transcribing(frame: self.animationFrameIndex)
+            }
+        }
     }
 
-    private func stopTranscribeAnimation() {
+    private func stopAnimation() {
         transcribeAnimationTimer?.invalidate()
         transcribeAnimationTimer = nil
     }
