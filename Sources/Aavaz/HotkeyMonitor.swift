@@ -1,4 +1,4 @@
-import CoreGraphics
+import AppKit
 import Foundation
 import QuartzCore
 
@@ -8,8 +8,8 @@ final class HotkeyMonitor {
     var onCancel: (() -> Void)?
     var onStatusChange: ((String) -> Void)?
 
-    private var eventTap: CFMachPort?
-    private var runLoopSource: CFRunLoopSource?
+    private var globalMonitor: Any?
+    private var localMonitor: Any?
     private let detector = DoubleTapDetector()
 
     var triggerKeyCode: UInt16 {
@@ -23,80 +23,66 @@ final class HotkeyMonitor {
     }
 
     func start() {
-        guard eventTap == nil else {
+        guard globalMonitor == nil else {
             onStatusChange?("Hotkey active")
             return
         }
 
-        let eventMask: CGEventMask = (1 << CGEventType.keyDown.rawValue)
-            | (1 << CGEventType.keyUp.rawValue)
-            | (1 << CGEventType.flagsChanged.rawValue)
+        let eventMask: NSEvent.EventTypeMask = [.keyDown, .keyUp, .flagsChanged]
 
-        let context = Unmanaged.passUnretained(self).toOpaque()
-
-        guard let tap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .listenOnly,
-            eventsOfInterest: eventMask,
-            callback: hotkeyCallback,
-            userInfo: context
-        ) else {
-            print("[Aavaz] ERROR: Failed to create event tap — Accessibility permission not granted")
-            onStatusChange?("No Accessibility permission")
-            return
+        // Global monitor catches events when OTHER apps are focused
+        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: eventMask) { [weak self] event in
+            // Global monitor callback runs on the main thread
+            self?.handleEvent(event)
         }
 
-        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-        CGEvent.tapEnable(tap: tap, enable: true)
+        // Local monitor catches events when OUR app's menu is open
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: eventMask) { [weak self] event in
+            self?.handleEvent(event)
+            return event
+        }
 
-        self.eventTap = tap
-        self.runLoopSource = source
-        print("[Aavaz] Event tap created — listening for keyCode \(triggerKeyCode)")
-        onStatusChange?("Ready — double-tap \(ShortcutRecorder.keyName(for: triggerKeyCode))")
+        if globalMonitor != nil {
+            print("[Aavaz] Global key monitor started — listening for keyCode \(triggerKeyCode)")
+            onStatusChange?("Ready — double-tap \(ShortcutRecorder.keyName(for: triggerKeyCode))")
+        } else {
+            print("[Aavaz] ERROR: Failed to create global monitor — Accessibility permission not granted")
+            onStatusChange?("No Accessibility permission")
+        }
     }
 
     func stop() {
-        if let tap = eventTap {
-            CGEvent.tapEnable(tap: tap, enable: false)
-            if let source = runLoopSource {
-                CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
-            }
-            self.eventTap = nil
-            self.runLoopSource = nil
+        if let monitor = globalMonitor {
+            NSEvent.removeMonitor(monitor)
+            globalMonitor = nil
+        }
+        if let monitor = localMonitor {
+            NSEvent.removeMonitor(monitor)
+            localMonitor = nil
         }
         detector.reset()
     }
 
-    fileprivate func reEnableTap() {
-        if let tap = eventTap {
-            CGEvent.tapEnable(tap: tap, enable: true)
-            print("[Aavaz] Re-enabled event tap after timeout")
-        }
-    }
+    private func handleEvent(_ event: NSEvent) {
+        let keyCode = event.keyCode
 
-    fileprivate func handleKeyInfo(keyCode: UInt16, eventType: CGEventType, flags: CGEventFlags) {
-        // Log flagsChanged events for debugging
-        if eventType == .flagsChanged {
-            let mask = Self.modifierMask(for: keyCode)
-            let isDown = flags.contains(mask)
+        if event.type == .flagsChanged {
+            let isDown = Self.isModifierDown(keyCode: keyCode, flags: event.modifierFlags)
             print("[Aavaz] flagsChanged keyCode=\(keyCode) isDown=\(isDown) trigger=\(triggerKeyCode) state=\(detector.state)")
         }
 
         // Escape cancels recording
-        if keyCode == 53 && eventType == .keyDown {
+        if keyCode == 53 && event.type == .keyDown {
             onCancel?()
             return
         }
 
         // For modifier keys, use flagsChanged and check the appropriate mask
         let isKeyDown: Bool
-        if eventType == .flagsChanged {
-            let mask = Self.modifierMask(for: keyCode)
-            isKeyDown = flags.contains(mask)
+        if event.type == .flagsChanged {
+            isKeyDown = Self.isModifierDown(keyCode: keyCode, flags: event.modifierFlags)
         } else {
-            isKeyDown = eventType == .keyDown
+            isKeyDown = event.type == .keyDown
         }
 
         let triggered = detector.handleKeyEvent(
@@ -111,46 +97,15 @@ final class HotkeyMonitor {
         }
     }
 
-    private static func modifierMask(for keyCode: UInt16) -> CGEventFlags {
+    private static func isModifierDown(keyCode: UInt16, flags: NSEvent.ModifierFlags) -> Bool {
         switch keyCode {
-        case 56, 60:  return .maskShift
-        case 59, 62:  return .maskControl
-        case 58, 61:  return .maskAlternate
-        case 55, 54:  return .maskCommand
-        case 57:      return .maskAlphaShift
-        case 63:      return .maskSecondaryFn
-        default:      return CGEventFlags(rawValue: 0)
+        case 56, 60:  return flags.contains(.shift)
+        case 59, 62:  return flags.contains(.control)
+        case 58, 61:  return flags.contains(.option)
+        case 55, 54:  return flags.contains(.command)
+        case 57:      return flags.contains(.capsLock)
+        case 63:      return flags.contains(.function)
+        default:      return false
         }
     }
-}
-
-private func hotkeyCallback(
-    proxy: CGEventTapProxy,
-    type: CGEventType,
-    event: CGEvent,
-    userInfo: UnsafeMutableRawPointer?
-) -> Unmanaged<CGEvent>? {
-    guard let userInfo else {
-        return Unmanaged.passUnretained(event)
-    }
-
-    let monitor = Unmanaged<HotkeyMonitor>.fromOpaque(userInfo).takeUnretainedValue()
-
-    // Re-enable tap if macOS disabled it
-    if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-        MainActor.assumeIsolated {
-            monitor.reEnableTap()
-        }
-        return Unmanaged.passUnretained(event)
-    }
-
-    let keyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
-    let eventType = event.type
-    let flags = event.flags
-
-    MainActor.assumeIsolated {
-        monitor.handleKeyInfo(keyCode: keyCode, eventType: eventType, flags: flags)
-    }
-
-    return Unmanaged.passUnretained(event)
 }
