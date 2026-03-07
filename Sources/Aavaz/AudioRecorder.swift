@@ -1,6 +1,20 @@
 @preconcurrency import AVFoundation
 import CoreAudio
 
+enum AudioRecorderError: Error, LocalizedError {
+    case noMicrophonePermission
+    case noInputDevice
+    case formatError
+
+    var errorDescription: String? {
+        switch self {
+        case .noMicrophonePermission: "Microphone permission not granted"
+        case .noInputDevice: "No audio input device available"
+        case .formatError: "Failed to create audio format"
+        }
+    }
+}
+
 @MainActor
 final class AudioRecorder {
     private var audioEngine: AVAudioEngine?
@@ -13,17 +27,31 @@ final class AudioRecorder {
     func startRecording() throws {
         guard !isRecording else { return }
 
+        // Check microphone permission first
+        let authStatus = AVCaptureDevice.authorizationStatus(for: .audio)
+        guard authStatus == .authorized else {
+            throw AudioRecorderError.noMicrophonePermission
+        }
+
         audioBuffer.removeAll(keepingCapacity: true)
 
         let engine = AVAudioEngine()
+
+        // Accessing inputNode can crash if no input device — check first
+        guard engine.inputNode.inputFormat(forBus: 0).channelCount > 0 else {
+            throw AudioRecorderError.noInputDevice
+        }
+
         let inputNode = engine.inputNode
 
-        let desiredFormat = AVAudioFormat(
+        guard let desiredFormat = AVAudioFormat(
             commonFormat: .pcmFormatFloat32,
             sampleRate: Self.sampleRate,
             channels: AVAudioChannelCount(Self.channelCount),
             interleaved: false
-        )!
+        ) else {
+            throw AudioRecorderError.formatError
+        }
 
         let hwFormat = inputNode.outputFormat(forBus: 0)
 

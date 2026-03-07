@@ -28,7 +28,7 @@ struct Preferences: Codable, Sendable {
         ],
         activeProfileIndex: 0,
         triggerKeyCode: 60,
-        doubleTapWindow: 0.3,
+        doubleTapWindow: 0.4,
         restoreClipboard: true
     )
 }

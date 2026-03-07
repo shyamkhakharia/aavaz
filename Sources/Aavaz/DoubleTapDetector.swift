@@ -9,7 +9,7 @@ final class DoubleTapDetector: Sendable {
 
     struct Config: Sendable {
         var triggerKeyCode: UInt16 = 60  // Right Shift
-        var doubleTapWindow: TimeInterval = 0.3
+        var doubleTapWindow: TimeInterval = 0.4
     }
 
     nonisolated(unsafe) private(set) var state: State = .idle

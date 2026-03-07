@@ -209,10 +209,19 @@ final class AavazApp: NSObject, NSApplicationDelegate {
         textInjector.restoreClipboard = preferences.restoreClipboard
 
         hotkeyMonitor.onDoubleTap = { [weak self] in
-            self?.toggleRecording()
+            // Defer to next run loop tick so we don't clash with menu tracking
+            DispatchQueue.main.async {
+                self?.statusItem?.menu?.cancelTracking()
+                self?.toggleRecording()
+            }
         }
         hotkeyMonitor.onCancel = { [weak self] in
-            self?.cancelRecording()
+            DispatchQueue.main.async {
+                self?.cancelRecording()
+            }
+        }
+        hotkeyMonitor.onStatusChange = { [weak self] status in
+            self?.updateStatus(status)
         }
     }
 
