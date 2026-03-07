@@ -2,8 +2,9 @@ import AppKit
 
 /// Menubar icon states.
 /// Idle: SF Symbol waveform (template).
-/// Recording: animated audio level bars in accent color.
-/// Transcribing: circular dot spinner in accent color.
+/// Recording: animated thin waveform bars matching the SF Symbol weight.
+/// Transcribing: circular dot spinner.
+/// Error: dimmed waveform with a small warning dot.
 enum MenuBarIcon {
     /// Brand accent color matching the website (#6E6AE8).
     static let accentColor = NSColor(red: 0x6E / 255.0, green: 0x6A / 255.0, blue: 0xE8 / 255.0, alpha: 1.0)
@@ -14,53 +15,50 @@ enum MenuBarIcon {
         return image
     }
 
-    /// Waveform with an X overlay — indicates missing permissions.
+    /// Dimmed waveform with a small amber dot in the bottom-right corner.
+    /// Subtle — doesn't scream error, just signals "needs attention".
     static func error() -> NSImage {
         let size = NSSize(width: 20, height: 18)
         let image = NSImage(size: size, flipped: false) { rect in
-            // Draw waveform in gray
+            // Dimmed waveform
             if let sym = NSImage(systemSymbolName: "waveform", accessibilityDescription: nil) {
-                let config = NSImage.SymbolConfiguration(pointSize: 13, weight: .medium)
+                let config = NSImage.SymbolConfiguration(pointSize: 13, weight: .regular)
                 let configured = sym.withSymbolConfiguration(config) ?? sym
                 let symSize = configured.size
                 let x = (rect.width - symSize.width) / 2 - 1
                 let y = (rect.height - symSize.height) / 2
-                NSColor.systemGray.withAlphaComponent(0.5).set()
                 configured.draw(in: NSRect(x: x, y: y, width: symSize.width, height: symSize.height),
-                               from: .zero, operation: .sourceOver, fraction: 0.4)
+                               from: .zero, operation: .sourceOver, fraction: 0.25)
             }
 
-            // Draw X
-            let path = NSBezierPath()
-            path.lineWidth = 1.8
-            path.lineCapStyle = .round
-            let inset: CGFloat = 5.0
-            path.move(to: NSPoint(x: rect.minX + inset, y: rect.minY + inset))
-            path.line(to: NSPoint(x: rect.maxX - inset, y: rect.maxY - inset))
-            path.move(to: NSPoint(x: rect.maxX - inset, y: rect.minY + inset))
-            path.line(to: NSPoint(x: rect.minX + inset, y: rect.maxY - inset))
-            NSColor.systemRed.withAlphaComponent(0.8).setStroke()
-            path.stroke()
+            // Small amber warning dot — bottom right
+            let dotSize: CGFloat = 5.0
+            let dotRect = NSRect(
+                x: rect.maxX - dotSize - 1.5,
+                y: rect.minY + 2.0,
+                width: dotSize, height: dotSize
+            )
+            NSColor.systemOrange.setFill()
+            NSBezierPath(ovalIn: dotRect).fill()
+
             return true
         }
         image.isTemplate = false
         return image
     }
 
-    // MARK: - Recording (animated audio level bars)
+    // MARK: - Recording (thin waveform bars to match SF Symbol weight)
 
-    /// Number of vertical bars in the visualizer.
-    private static let barCount = 5
-    /// Pre-computed bar height patterns (each is an array of heights for the bars).
+    private static let barCount = 7
     private static let barPatterns: [[CGFloat]] = [
-        [0.3, 0.7, 1.0, 0.5, 0.2],
-        [0.5, 0.9, 0.6, 0.8, 0.4],
-        [0.8, 0.4, 0.7, 1.0, 0.6],
-        [0.6, 0.6, 0.9, 0.3, 0.9],
-        [0.4, 1.0, 0.5, 0.7, 0.3],
-        [0.7, 0.3, 0.8, 0.6, 0.7],
-        [0.9, 0.8, 0.3, 0.9, 0.5],
-        [0.3, 0.5, 1.0, 0.4, 0.8],
+        [0.25, 0.50, 0.80, 1.00, 0.70, 0.40, 0.20],
+        [0.40, 0.70, 0.55, 0.85, 1.00, 0.60, 0.30],
+        [0.30, 0.90, 0.70, 0.50, 0.80, 1.00, 0.45],
+        [0.50, 0.40, 1.00, 0.70, 0.55, 0.75, 0.60],
+        [0.60, 0.80, 0.45, 0.90, 0.65, 0.35, 0.85],
+        [0.35, 0.65, 0.90, 0.40, 1.00, 0.55, 0.50],
+        [0.70, 0.35, 0.60, 0.80, 0.45, 0.90, 0.40],
+        [0.45, 0.55, 0.75, 0.60, 0.35, 0.80, 0.70],
     ]
     static let recordingFrameCount = barPatterns.count
 
@@ -69,8 +67,8 @@ enum MenuBarIcon {
         let size = NSSize(width: 18, height: 18)
 
         let image = NSImage(size: size, flipped: false) { rect in
-            let barWidth: CGFloat = 2.0
-            let gap: CGFloat = 1.5
+            let barWidth: CGFloat = 1.2       // thin like SF Symbol strokes
+            let gap: CGFloat = 1.2
             let totalWidth = CGFloat(barCount) * barWidth + CGFloat(barCount - 1) * gap
             let startX = (rect.width - totalWidth) / 2
             let maxHeight: CGFloat = 12.0
@@ -79,11 +77,11 @@ enum MenuBarIcon {
             accentColor.setFill()
 
             for i in 0..<barCount {
-                let height = max(2.5, pattern[i] * maxHeight)
+                let height = max(2.0, pattern[i] * maxHeight)
                 let x = startX + CGFloat(i) * (barWidth + gap)
-                let y = baseY + (maxHeight - height) / 2  // center vertically
+                let y = baseY + (maxHeight - height) / 2
                 let barRect = NSRect(x: x, y: y, width: barWidth, height: height)
-                NSBezierPath(roundedRect: barRect, xRadius: 1.0, yRadius: 1.0).fill()
+                NSBezierPath(roundedRect: barRect, xRadius: 0.6, yRadius: 0.6).fill()
             }
             return true
         }
