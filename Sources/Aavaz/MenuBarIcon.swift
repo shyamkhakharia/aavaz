@@ -14,6 +14,39 @@ enum MenuBarIcon {
         return image
     }
 
+    /// Waveform with an X overlay — indicates missing permissions.
+    static func error() -> NSImage {
+        let size = NSSize(width: 20, height: 18)
+        let image = NSImage(size: size, flipped: false) { rect in
+            // Draw waveform in gray
+            if let sym = NSImage(systemSymbolName: "waveform", accessibilityDescription: nil) {
+                let config = NSImage.SymbolConfiguration(pointSize: 13, weight: .medium)
+                let configured = sym.withSymbolConfiguration(config) ?? sym
+                let symSize = configured.size
+                let x = (rect.width - symSize.width) / 2 - 1
+                let y = (rect.height - symSize.height) / 2
+                NSColor.systemGray.withAlphaComponent(0.5).set()
+                configured.draw(in: NSRect(x: x, y: y, width: symSize.width, height: symSize.height),
+                               from: .zero, operation: .sourceOver, fraction: 0.4)
+            }
+
+            // Draw X
+            let path = NSBezierPath()
+            path.lineWidth = 1.8
+            path.lineCapStyle = .round
+            let inset: CGFloat = 5.0
+            path.move(to: NSPoint(x: rect.minX + inset, y: rect.minY + inset))
+            path.line(to: NSPoint(x: rect.maxX - inset, y: rect.maxY - inset))
+            path.move(to: NSPoint(x: rect.maxX - inset, y: rect.minY + inset))
+            path.line(to: NSPoint(x: rect.minX + inset, y: rect.maxY - inset))
+            NSColor.systemRed.withAlphaComponent(0.8).setStroke()
+            path.stroke()
+            return true
+        }
+        image.isTemplate = false
+        return image
+    }
+
     // MARK: - Recording (animated audio level bars)
 
     /// Number of vertical bars in the visualizer.

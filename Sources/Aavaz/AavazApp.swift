@@ -22,6 +22,7 @@ final class AavazApp: NSObject, NSApplicationDelegate {
     private var profileMenuItems: [NSMenuItem] = []
     private var tapWindowMenuItems: [NSMenuItem] = []
     private var triggerKeyMenuItem: NSMenuItem?
+    private var permissionMenuItem: NSMenuItem?
     private let shortcutRecorder = ShortcutRecorder()
 
     // Available tap windows
@@ -151,6 +152,17 @@ final class AavazApp: NSObject, NSApplicationDelegate {
         download.target = self
         menu.addItem(download)
 
+        // Grant Permissions (hidden by default, shown when needed)
+        let permsItem = NSMenuItem(
+            title: "⚠ Grant Accessibility Permission…",
+            action: #selector(openAccessibilitySettings),
+            keyEquivalent: ""
+        )
+        permsItem.target = self
+        permsItem.isHidden = true
+        menu.addItem(permsItem)
+        permissionMenuItem = permsItem
+
         menu.addItem(.separator())
 
         // Quit
@@ -166,6 +178,7 @@ final class AavazApp: NSObject, NSApplicationDelegate {
         case idle
         case recording
         case transcribing
+        case error
     }
 
     private func setIconState(_ state: IconState) {
@@ -182,6 +195,9 @@ final class AavazApp: NSObject, NSApplicationDelegate {
 
         case .transcribing:
             startTranscribeAnimation()
+
+        case .error:
+            button.image = MenuBarIcon.error()
         }
     }
 
@@ -247,6 +263,20 @@ final class AavazApp: NSObject, NSApplicationDelegate {
     }
 
     // MARK: - Menu Actions
+
+    @objc private func openAccessibilitySettings() {
+        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+    }
+
+    private func showPermissionError() {
+        setIconState(.error)
+        updateStatus("Accessibility permission required")
+        permissionMenuItem?.isHidden = false
+    }
+
+    private func clearPermissionError() {
+        permissionMenuItem?.isHidden = true
+    }
 
     @objc private func selectProfile(_ sender: NSMenuItem) {
         let index = sender.tag
@@ -454,11 +484,12 @@ final class AavazApp: NSObject, NSApplicationDelegate {
                         Task {
                             let injected = await self.textInjector.inject(text: text)
                             if injected {
+                                self.clearPermissionError()
                                 self.updateStatus("Ready")
                                 print("[Aavaz] text injected")
                             } else {
-                                self.updateStatus("Grant Accessibility in System Settings")
-                                self.permissionManager.promptAccessibilityIfNeeded()
+                                self.showPermissionError()
+                                print("[Aavaz] paste failed — text is on clipboard, Cmd+V manually")
                             }
                         }
                     }
