@@ -37,12 +37,54 @@ final class AavazApp: NSObject, NSApplicationDelegate {
         setupMenuBar()
         configureFromPreferences()
 
+        // Check permissions without re-prompting if already granted
         Task {
-            let granted = await permissionManager.ensurePermissions()
-            if granted {
-                hotkeyMonitor.start()
+            await ensurePermissionsOnce()
+            hotkeyMonitor.start()
+            await autoDownloadModels()
+        }
+    }
+
+    /// Only prompts for permissions that haven't been granted yet.
+    private func ensurePermissionsOnce() async {
+        // Mic: only request if not yet determined
+        let micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
+        if micStatus == .notDetermined {
+            let granted = await AudioRecorder.requestMicrophoneAccess()
+            if !granted {
+                print("[Aavaz] Microphone permission denied")
+            }
+        } else if micStatus == .denied || micStatus == .restricted {
+            print("[Aavaz] Microphone permission not granted (status=\(micStatus.rawValue))")
+        }
+
+        // Accessibility: only prompt if not already trusted
+        if !permissionManager.checkAccessibilityPermission() {
+            permissionManager.promptAccessibilityPermission()
+        }
+    }
+
+    /// Auto-download tiny.en and base.en on first launch. Warn for medium.en.
+    private func autoDownloadModels() async {
+        let autoModels: [ModelManager.ModelName] = [.tinyEN, .baseEN]
+        for model in autoModels {
+            if !modelManager.isModelDownloaded(model) {
+                updateStatus("Downloading \(model.rawValue)…")
+                print("[Aavaz] Auto-downloading \(model.rawValue)")
+                do {
+                    try await modelManager.downloadModel(model) { [weak self] progress in
+                        DispatchQueue.main.async {
+                            self?.updateStatus("Downloading \(model.rawValue)… \(Int(progress * 100))%")
+                        }
+                    }
+                    print("[Aavaz] Downloaded \(model.rawValue)")
+                } catch {
+                    print("[Aavaz] Failed to download \(model.rawValue): \(error)")
+                    updateStatus("Failed to download \(model.rawValue)")
+                }
             }
         }
+        updateStatus("Ready")
     }
 
     private func setupMenuBar() {
@@ -83,7 +125,7 @@ final class AavazApp: NSObject, NSApplicationDelegate {
         let settingsItem = NSMenuItem(title: "Settings", action: nil, keyEquivalent: "")
         let settingsMenu = NSMenu()
 
-        // Trigger key — press to record
+        // Trigger key
         let triggerLabel = ShortcutRecorder.keyName(for: preferences.triggerKeyCode)
         let triggerItem = NSMenuItem(
             title: "Trigger Key: \(triggerLabel)  ⌄",
@@ -138,6 +180,8 @@ final class AavazApp: NSObject, NSApplicationDelegate {
         statusItem?.menu = menu
     }
 
+    // MARK: - Icon States
+
     private enum IconState {
         case idle
         case recording
@@ -147,19 +191,14 @@ final class AavazApp: NSObject, NSApplicationDelegate {
     private func setIconState(_ state: IconState) {
         stopTranscribeAnimation()
         guard let button = statusItem?.button else { return }
+        button.contentTintColor = nil
 
         switch state {
         case .idle:
-            let image = NSImage(systemSymbolName: "mic", accessibilityDescription: "Aavaz")
-            image?.isTemplate = true
-            button.contentTintColor = nil
-            button.image = image
+            button.image = MenuBarIcon.idle()
 
         case .recording:
-            let image = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "Recording")
-            image?.isTemplate = false
-            button.contentTintColor = .systemRed
-            button.image = image
+            button.image = MenuBarIcon.recording()
 
         case .transcribing:
             startTranscribeAnimation()
@@ -167,18 +206,13 @@ final class AavazApp: NSObject, NSApplicationDelegate {
     }
 
     private var transcribeFrameIndex = 0
-    private let transcribeFrames = ["ellipsis", "ellipsis.circle", "text.bubble", "ellipsis.circle"]
 
     private func startTranscribeAnimation() {
         guard let button = statusItem?.button else { return }
         transcribeFrameIndex = 0
+        button.image = MenuBarIcon.transcribing(frame: 0)
 
-        let img = NSImage(systemSymbolName: "ellipsis.circle", accessibilityDescription: "Transcribing")
-        img?.isTemplate = false
-        button.contentTintColor = .systemOrange
-        button.image = img
-
-        transcribeAnimationTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+        transcribeAnimationTimer = Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.advanceTranscribeFrame()
             }
@@ -187,11 +221,8 @@ final class AavazApp: NSObject, NSApplicationDelegate {
 
     private func advanceTranscribeFrame() {
         guard let button = statusItem?.button else { return }
-        transcribeFrameIndex = (transcribeFrameIndex + 1) % transcribeFrames.count
-        let frame = NSImage(systemSymbolName: transcribeFrames[transcribeFrameIndex], accessibilityDescription: "Transcribing")
-        frame?.isTemplate = false
-        button.contentTintColor = .systemOrange
-        button.image = frame
+        transcribeFrameIndex = (transcribeFrameIndex + 1) % MenuBarIcon.frameCount
+        button.image = MenuBarIcon.transcribing(frame: transcribeFrameIndex)
     }
 
     private func stopTranscribeAnimation() {
@@ -210,7 +241,6 @@ final class AavazApp: NSObject, NSApplicationDelegate {
         textInjector.restoreClipboard = preferences.restoreClipboard
 
         hotkeyMonitor.onDoubleTap = { [weak self] in
-            // Defer to next run loop tick so we don't clash with menu tracking
             DispatchQueue.main.async {
                 self?.statusItem?.menu?.cancelTracking()
                 self?.toggleRecording()
@@ -244,7 +274,6 @@ final class AavazApp: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openShortcutRecorder() {
-        // Temporarily stop the hotkey monitor so it doesn't interfere
         hotkeyMonitor.stop()
 
         shortcutRecorder.onKeyRecorded = { [weak self] keyCode, name in
@@ -288,16 +317,29 @@ final class AavazApp: NSObject, NSApplicationDelegate {
             return
         }
 
+        // Warn for large models
+        if modelName == .mediumEN {
+            let alert = NSAlert()
+            alert.messageText = "Download medium.en model?"
+            alert.informativeText = "This model is ~1.5 GB and will take a while to download. It provides the highest quality transcription."
+            alert.alertStyle = .informational
+            alert.addButton(withTitle: "Download")
+            alert.addButton(withTitle: "Cancel")
+            if alert.runModal() != .alertFirstButtonReturn {
+                return
+            }
+        }
+
         updateStatus("Downloading \(profile.modelName)…")
 
         Task {
             do {
                 try await modelManager.downloadModel(modelName) { [weak self] progress in
                     DispatchQueue.main.async {
-                        self?.updateStatus("Downloading… \(Int(progress * 100))%")
+                        self?.updateStatus("Downloading \(profile.modelName)… \(Int(progress * 100))%")
                     }
                 }
-                updateStatus("Download complete ✓")
+                updateStatus("Download complete")
             } catch {
                 updateStatus("Download failed: \(error.localizedDescription)")
             }
@@ -341,7 +383,6 @@ final class AavazApp: NSObject, NSApplicationDelegate {
         case .authorized:
             doStartRecording()
         case .notDetermined:
-            // Request permission, then start recording
             updateStatus("Requesting mic permission…")
             Task {
                 let granted = await AudioRecorder.requestMicrophoneAccess()
