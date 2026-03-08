@@ -94,8 +94,8 @@ final class AudioRecorder {
     private let collector = AudioBufferCollector()
     private(set) var isRecording = false
 
-    static let sampleRate: Double = 16000
-    static let channelCount: UInt32 = 1
+    nonisolated static let sampleRate: Double = 16000
+    nonisolated static let channelCount: UInt32 = 1
 
     func startRecording() throws {
         guard !isRecording else { return }
