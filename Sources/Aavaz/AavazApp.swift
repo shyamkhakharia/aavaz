@@ -292,7 +292,7 @@ final class AavazApp: NSObject, NSApplicationDelegate {
         button.image = MenuBarIcon.recording(frame: 0)
 
         transcribeAnimationTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated {
+            DispatchQueue.main.async {
                 guard let self, let button = self.statusItem?.button else { return }
                 self.animationFrameIndex = (self.animationFrameIndex + 1) % MenuBarIcon.recordingFrameCount
                 button.image = MenuBarIcon.recording(frame: self.animationFrameIndex)
@@ -306,7 +306,7 @@ final class AavazApp: NSObject, NSApplicationDelegate {
         button.image = MenuBarIcon.transcribing(frame: 0)
 
         transcribeAnimationTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated {
+            DispatchQueue.main.async {
                 guard let self, let button = self.statusItem?.button else { return }
                 self.animationFrameIndex = (self.animationFrameIndex + 1) % MenuBarIcon.transcribingFrameCount
                 button.image = MenuBarIcon.transcribing(frame: self.animationFrameIndex)
@@ -543,9 +543,13 @@ final class AavazApp: NSObject, NSApplicationDelegate {
         updateStatus("Transcribing…")
 
         let profile = preferences.activeProfile
-        let modelPath = modelManager.modelPath(
-            for: ModelManager.ModelName(rawValue: profile.modelName)!
-        ).path
+        guard let modelName = ModelManager.ModelName(rawValue: profile.modelName) else {
+            updateStatus("Unknown model")
+            isTranscribing = false
+            setIconState(.idle)
+            return
+        }
+        let modelPath = modelManager.modelPath(for: modelName).path
         print("[Aavaz] transcribing with model: \(modelPath)")
 
         Task.detached { [weak self] in

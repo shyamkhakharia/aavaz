@@ -1,6 +1,6 @@
 import Foundation
 
-final class DoubleTapDetector: Sendable {
+final class DoubleTapDetector: @unchecked Sendable {
     enum State: Sendable {
         case idle
         case firstTap
@@ -12,41 +12,64 @@ final class DoubleTapDetector: Sendable {
         var doubleTapWindow: TimeInterval = 0.4
     }
 
-    nonisolated(unsafe) private(set) var state: State = .idle
-    nonisolated(unsafe) private var lastTapTime: TimeInterval = 0
-    nonisolated(unsafe) var config = Config()
+    private let lock = NSLock()
+    private var _state: State = .idle
+    private var _lastTapTime: TimeInterval = 0
+    private var _config = Config()
+
+    var state: State {
+        lock.lock()
+        defer { lock.unlock() }
+        return _state
+    }
+
+    var config: Config {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return _config
+        }
+        set {
+            lock.lock()
+            _config = newValue
+            lock.unlock()
+        }
+    }
 
     func handleKeyEvent(keyCode: UInt16, isKeyDown: Bool, timestamp: TimeInterval) -> Bool {
-        // Ignore events for keys we don't care about
-        guard keyCode == config.triggerKeyCode else {
+        lock.lock()
+        defer { lock.unlock() }
+
+        guard keyCode == _config.triggerKeyCode else {
             return false
         }
 
         // Auto-expire stale states based on timestamp
-        if state != .idle && (timestamp - lastTapTime) > config.doubleTapWindow * 2 {
-            state = .idle
+        if _state != .idle && (timestamp - _lastTapTime) > _config.doubleTapWindow * 2 {
+            _state = .idle
         }
 
-        switch state {
+        switch _state {
         case .idle:
             if isKeyDown {
-                state = .firstTap
-                lastTapTime = timestamp
+                _state = .firstTap
+                _lastTapTime = timestamp
             }
         case .firstTap:
             if !isKeyDown {
-                state = .armed
+                _state = .armed
             }
         case .armed:
             if isKeyDown {
-                let elapsed = timestamp - lastTapTime
-                if elapsed <= config.doubleTapWindow {
-                    reset()
+                let elapsed = timestamp - _lastTapTime
+                if elapsed <= _config.doubleTapWindow {
+                    _state = .idle
+                    _lastTapTime = 0
                     return true  // Double tap detected
                 } else {
                     // Too slow, treat as new first tap
-                    state = .firstTap
-                    lastTapTime = timestamp
+                    _state = .firstTap
+                    _lastTapTime = timestamp
                 }
             }
         }
@@ -54,7 +77,9 @@ final class DoubleTapDetector: Sendable {
     }
 
     func reset() {
-        state = .idle
-        lastTapTime = 0
+        lock.lock()
+        _state = .idle
+        _lastTapTime = 0
+        lock.unlock()
     }
 }

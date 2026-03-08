@@ -9,9 +9,12 @@ enum MenuBarIcon {
     static let accentColor = DesignTokens.accent
 
     static func idle() -> NSImage {
-        let image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "Aavaz")!
-        image.isTemplate = true
-        return image
+        if let image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "Aavaz") {
+            image.isTemplate = true
+            return image
+        }
+        // Fallback: draw waveform manually if SF Symbol unavailable
+        return recording(frame: 0)
     }
 
     /// Dimmed waveform with a small amber dot in the bottom-right corner.

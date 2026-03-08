@@ -101,27 +101,30 @@ final class ShortcutRecorder {
         case 51:  return "Delete"
         case 53:  return "Escape"
         default:
-            // Try to get character from key code
-            let source = TISCopyCurrentKeyboardInputSource().takeRetainedValue()
-            let layoutData = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData)
-            if let data = layoutData {
-                let layout = unsafeBitCast(data, to: CFData.self)
-                let keyboardLayout = unsafeBitCast(CFDataGetBytePtr(layout), to: UnsafePointer<UCKeyboardLayout>.self)
-                var deadKeyState: UInt32 = 0
-                var chars = [UniChar](repeating: 0, count: 4)
-                var length: Int = 0
-                UCKeyTranslate(
-                    keyboardLayout,
-                    keyCode,
-                    UInt16(kUCKeyActionDown),
-                    0, UInt32(LMGetKbdType()),
-                    UInt32(kUCKeyTranslateNoDeadKeysBit),
-                    &deadKeyState,
-                    4, &length, &chars
-                )
-                if length > 0 {
-                    return String(utf16CodeUnits: chars, count: length).uppercased()
-                }
+            // Try to get character from key code via keyboard layout
+            guard let source = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue(),
+                  let layoutData = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData) else {
+                return "Key \(keyCode)"
+            }
+            let data = unsafeBitCast(layoutData, to: CFData.self)
+            guard let bytePtr = CFDataGetBytePtr(data) else {
+                return "Key \(keyCode)"
+            }
+            let keyboardLayout = bytePtr.withMemoryRebound(to: UCKeyboardLayout.self, capacity: 1) { $0 }
+            var deadKeyState: UInt32 = 0
+            var chars = [UniChar](repeating: 0, count: 4)
+            var length: Int = 0
+            let status = UCKeyTranslate(
+                keyboardLayout,
+                keyCode,
+                UInt16(kUCKeyActionDown),
+                0, UInt32(LMGetKbdType()),
+                UInt32(kUCKeyTranslateNoDeadKeysBit),
+                &deadKeyState,
+                4, &length, &chars
+            )
+            if status == noErr, length > 0 {
+                return String(utf16CodeUnits: chars, count: length).uppercased()
             }
             return "Key \(keyCode)"
         }

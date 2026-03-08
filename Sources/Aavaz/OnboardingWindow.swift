@@ -268,7 +268,7 @@ final class OnboardingWindow {
         animationFrame = 0
         waveformView.image = makeLargeWaveform(frame: 0)
         animationTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated {
+            DispatchQueue.main.async {
                 guard let self, let view = self.contentView?.viewWithTag(200) as? NSImageView else { return }
                 self.animationFrame = (self.animationFrame + 1) % 8
                 view.image = self.makeLargeWaveform(frame: self.animationFrame)
@@ -398,7 +398,7 @@ final class OnboardingWindow {
 
     private func startPermissionPolling() {
         permissionPollTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated {
+            DispatchQueue.main.async {
                 self?.refreshPermissionButtons()
             }
         }
