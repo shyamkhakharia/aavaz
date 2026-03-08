@@ -50,22 +50,23 @@ final class AavazApp: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Sets the app icon programmatically so it shows in System Settings, Dock, etc.
+    /// Sets the app icon programmatically as a fallback when no .icns is bundled.
     private func setAppIcon() {
-        let size: CGFloat = 256
+        // Check if bundle already has an icon
+        if let _ = Bundle.main.path(forResource: "AppIcon", ofType: "icns") { return }
+
+        let size: CGFloat = 512
         let img = NSImage(size: NSSize(width: size, height: size), flipped: false) { rect in
-            // Rounded rect background
-            let bgPath = NSBezierPath(roundedRect: rect.insetBy(dx: 8, dy: 8), xRadius: 48, yRadius: 48)
+            let bgPath = NSBezierPath(roundedRect: rect.insetBy(dx: 16, dy: 16), xRadius: 96, yRadius: 96)
             DesignTokens.accent.setFill()
             bgPath.fill()
 
-            // Waveform bars (white, centered)
             let barCount = 7
-            let barWidth: CGFloat = 12
-            let gap: CGFloat = 10
+            let barWidth: CGFloat = 24
+            let gap: CGFloat = 20
             let totalW = CGFloat(barCount) * barWidth + CGFloat(barCount - 1) * gap
             let startX = (rect.width - totalW) / 2
-            let maxH: CGFloat = 140
+            let maxH: CGFloat = 280
             let centerY = rect.height / 2
             let heights: [CGFloat] = [0.30, 0.55, 0.80, 1.0, 0.75, 0.50, 0.25]
 

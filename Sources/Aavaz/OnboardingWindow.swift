@@ -33,6 +33,9 @@ final class OnboardingWindow {
     private var animationTimer: Timer?
     private var animationFrame = 0
 
+    // Permission polling
+    private var permissionPollTimer: Timer?
+
     // Keep ShortcutRecorder alive during key capture
     private var shortcutRecorder: ShortcutRecorder?
 
@@ -48,6 +51,7 @@ final class OnboardingWindow {
 
     func close() {
         stopAnimation()
+        stopPermissionPolling()
         panel?.close()
         panel = nil
         contentView = nil
@@ -97,6 +101,7 @@ final class OnboardingWindow {
     private func showStep(_ step: Int) {
         currentStep = step
         stopAnimation()
+        stopPermissionPolling()
         contentView?.subviews.forEach { $0.removeFromSuperview() }
         guard let container = contentView else { return }
 
@@ -244,6 +249,9 @@ final class OnboardingWindow {
         container.addSubview(btn)
 
         addStepDots(to: container, current: 1)
+
+        // Poll for permission changes every 1.5s
+        startPermissionPolling()
     }
 
     // MARK: - Step 3: Ready
@@ -386,6 +394,37 @@ final class OnboardingWindow {
     private func stopAnimation() {
         animationTimer?.invalidate()
         animationTimer = nil
+    }
+
+    private func startPermissionPolling() {
+        permissionPollTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.refreshPermissionButtons()
+            }
+        }
+    }
+
+    private func stopPermissionPolling() {
+        permissionPollTimer?.invalidate()
+        permissionPollTimer = nil
+    }
+
+    private func refreshPermissionButtons() {
+        let micGranted = permissionManager?.isMicrophoneAuthorized() ?? false
+        if let btn = micButton {
+            btn.title = micGranted ? "✓  Microphone Granted" : "Grant Microphone Access"
+            btn.enabled = !micGranted
+            btn.alphaValue = micGranted ? 0.5 : 1.0
+            btn.needsDisplay = true
+        }
+
+        let axGranted = permissionManager?.isAccessibilityTrusted() ?? false
+        if let btn = accessibilityButton {
+            btn.title = axGranted ? "✓  Accessibility Granted" : "Grant Accessibility Access"
+            btn.enabled = !axGranted
+            btn.alphaValue = axGranted ? 0.5 : 1.0
+            btn.needsDisplay = true
+        }
     }
 
     // MARK: - UI Helpers

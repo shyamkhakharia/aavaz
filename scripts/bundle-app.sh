@@ -14,6 +14,9 @@ echo "Building release binary..."
 cd "$PROJECT_ROOT"
 swift build -c release 2>&1
 
+echo "Generating app icon..."
+swift "$SCRIPT_DIR/generate-icon.swift" "$PROJECT_ROOT/build"
+
 echo "Assembling .app bundle..."
 
 # Clean previous bundle
@@ -25,6 +28,11 @@ mkdir -p "$APP_DIR/Contents/Resources"
 
 # Copy binary
 cp "$BUILD_DIR/Aavaz" "$APP_DIR/Contents/MacOS/${APP_NAME}"
+
+# Copy icon
+if [ -f "$PROJECT_ROOT/build/AppIcon.icns" ]; then
+    cp "$PROJECT_ROOT/build/AppIcon.icns" "$APP_DIR/Contents/Resources/AppIcon.icns"
+fi
 
 # Create Info.plist
 cat > "$APP_DIR/Contents/Info.plist" << PLIST
@@ -46,6 +54,8 @@ cat > "$APP_DIR/Contents/Info.plist" << PLIST
     <string>${APP_NAME}</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>LSUIElement</key>
     <true/>
     <key>LSMinimumSystemVersion</key>
