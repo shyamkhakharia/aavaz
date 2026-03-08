@@ -92,7 +92,11 @@
         .logo-icon svg {
             width: 16px;
             height: 16px;
+        }
+
+        .logo-icon .waveform-bar {
             fill: white;
+            rx: 0.5;
         }
 
         .nav-links {
@@ -168,6 +172,38 @@
         @keyframes pulse-dot {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.4; }
+        }
+
+        /* Animated waveform bars */
+        .hero-waveform {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            margin-bottom: 36px;
+            height: 32px;
+        }
+
+        .hero-waveform span {
+            display: inline-block;
+            width: 3px;
+            border-radius: 2px;
+            background: var(--accent);
+            opacity: 0.35;
+            animation: waveBar 1.2s ease-in-out infinite;
+        }
+
+        .hero-waveform span:nth-child(1) { height: 10px; animation-delay: 0.0s; }
+        .hero-waveform span:nth-child(2) { height: 18px; animation-delay: 0.1s; }
+        .hero-waveform span:nth-child(3) { height: 28px; animation-delay: 0.2s; }
+        .hero-waveform span:nth-child(4) { height: 22px; animation-delay: 0.3s; }
+        .hero-waveform span:nth-child(5) { height: 14px; animation-delay: 0.4s; }
+        .hero-waveform span:nth-child(6) { height: 24px; animation-delay: 0.15s; }
+        .hero-waveform span:nth-child(7) { height: 16px; animation-delay: 0.35s; }
+
+        @keyframes waveBar {
+            0%, 100% { transform: scaleY(0.5); opacity: 0.2; }
+            50% { transform: scaleY(1); opacity: 0.5; }
         }
 
         h1 {
@@ -723,7 +759,14 @@
     <div class="container">
         <a href="#" class="logo">
             <div class="logo-icon">
-                <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" fill="white" stroke="none"/><path d="M19 10v2a7 7 0 0 1-14 0v-2" stroke="white" stroke-width="2" fill="none" stroke-linecap="round"/><line x1="12" y1="19" x2="12" y2="23" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
+                <svg viewBox="0 0 24 24">
+                    <rect class="waveform-bar" x="2" y="9" width="2" height="6" rx="1"/>
+                    <rect class="waveform-bar" x="6" y="6" width="2" height="12" rx="1"/>
+                    <rect class="waveform-bar" x="10" y="3" width="2" height="18" rx="1"/>
+                    <rect class="waveform-bar" x="14" y="5" width="2" height="14" rx="1"/>
+                    <rect class="waveform-bar" x="18" y="7" width="2" height="10" rx="1"/>
+                    <rect class="waveform-bar" x="22" y="9" width="2" height="6" rx="1"/>
+                </svg>
             </div>
             Aavaz
         </a>
@@ -742,6 +785,10 @@
         <div class="badge">
             <span class="badge-dot"></span>
             100% local · Zero cloud dependency
+        </div>
+
+        <div class="hero-waveform">
+            <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
         </div>
 
         <h1>
@@ -789,9 +836,16 @@
                         <div class="demo-arrow">→</div>
                         <div class="demo-step">
                             <div class="demo-icon-wrap">
-                                <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+                                <svg viewBox="0 0 24 24" fill="none">
+                                    <rect x="3" y="9" width="1.5" height="6" rx="0.75" fill="var(--accent-light)"/>
+                                    <rect x="6.5" y="6" width="1.5" height="12" rx="0.75" fill="var(--accent-light)"/>
+                                    <rect x="10" y="3" width="1.5" height="18" rx="0.75" fill="var(--accent-light)"/>
+                                    <rect x="13.5" y="5" width="1.5" height="14" rx="0.75" fill="var(--accent-light)"/>
+                                    <rect x="17" y="7" width="1.5" height="10" rx="0.75" fill="var(--accent-light)"/>
+                                    <rect x="20.5" y="9" width="1.5" height="6" rx="0.75" fill="var(--accent-light)"/>
+                                </svg>
                             </div>
-                            <div class="demo-key">🔴 Recording</div>
+                            <div class="demo-key">🟣 Recording</div>
                             <div class="demo-label">Speak naturally</div>
                         </div>
                         <div class="demo-arrow">→</div>

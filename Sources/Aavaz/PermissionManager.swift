@@ -30,15 +30,17 @@ final class PermissionManager {
         guard !isAccessibilityTrusted() else { return }
         guard !UserDefaults.standard.bool(forKey: Self.accessibilityAlertShownKey) else { return }
         UserDefaults.standard.set(true, forKey: Self.accessibilityAlertShownKey)
+        promptAccessibility()
+    }
 
-        let alert = NSAlert()
-        alert.messageText = "Accessibility Permission Required"
-        alert.informativeText = "Aavaz needs Accessibility permission to type transcribed text at your cursor.\n\nGrant access in System Settings → Privacy & Security → Accessibility."
-        alert.alertStyle = .warning
-        alert.addButton(withTitle: "Open System Settings")
-        alert.addButton(withTitle: "Later")
-
-        if alert.runModal() == .alertFirstButtonReturn {
+    /// Prompts for accessibility — triggers macOS system dialog which registers the app in the list.
+    func promptAccessibility() {
+        // This call with prompt:true is what actually adds the app to the Accessibility list
+        let trusted = AXIsProcessTrustedWithOptions(
+            ["AXTrustedCheckOptionPrompt" as CFString: true] as CFDictionary
+        )
+        if !trusted {
+            // Also open System Settings so user can toggle it on
             NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
         }
     }

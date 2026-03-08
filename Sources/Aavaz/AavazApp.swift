@@ -24,6 +24,7 @@ final class AavazApp: NSObject, NSApplicationDelegate {
     private var triggerKeyMenuItem: NSMenuItem?
     private var permissionMenuItem: NSMenuItem?
     private let shortcutRecorder = ShortcutRecorder()
+    private var onboardingWindow: OnboardingWindow?
 
     // Available tap windows
     private let tapWindowOptions: [(String, TimeInterval)] = [
@@ -34,15 +35,86 @@ final class AavazApp: NSObject, NSApplicationDelegate {
     ]
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        setAppIcon()
         preferences = prefsManager.load()
         setupMenuBar()
         configureFromPreferences()
 
-        hotkeyMonitor.start()
-
-        Task {
-            await autoDownloadModels()
+        if !OnboardingWindow.isOnboardingComplete {
+            showOnboarding()
+        } else {
+            hotkeyMonitor.start()
+            Task {
+                await autoDownloadModels()
+            }
         }
+    }
+
+    /// Sets the app icon programmatically so it shows in System Settings, Dock, etc.
+    private func setAppIcon() {
+        let size: CGFloat = 256
+        let img = NSImage(size: NSSize(width: size, height: size), flipped: false) { rect in
+            // Rounded rect background
+            let bgPath = NSBezierPath(roundedRect: rect.insetBy(dx: 8, dy: 8), xRadius: 48, yRadius: 48)
+            DesignTokens.accent.setFill()
+            bgPath.fill()
+
+            // Waveform bars (white, centered)
+            let barCount = 7
+            let barWidth: CGFloat = 12
+            let gap: CGFloat = 10
+            let totalW = CGFloat(barCount) * barWidth + CGFloat(barCount - 1) * gap
+            let startX = (rect.width - totalW) / 2
+            let maxH: CGFloat = 140
+            let centerY = rect.height / 2
+            let heights: [CGFloat] = [0.30, 0.55, 0.80, 1.0, 0.75, 0.50, 0.25]
+
+            NSColor.white.setFill()
+            for i in 0..<barCount {
+                let h = heights[i] * maxH
+                let x = startX + CGFloat(i) * (barWidth + gap)
+                let y = centerY - h / 2
+                let barRect = NSRect(x: x, y: y, width: barWidth, height: h)
+                NSBezierPath(roundedRect: barRect, xRadius: barWidth / 2, yRadius: barWidth / 2).fill()
+            }
+            return true
+        }
+        NSApp.applicationIconImage = img
+    }
+
+    private func showOnboarding() {
+        // If already showing, just bring to front
+        if let existing = onboardingWindow, existing.isVisible {
+            existing.bringToFront()
+            return
+        }
+
+        // Close any previous instance
+        onboardingWindow?.close()
+
+        let onboarding = OnboardingWindow()
+        onboarding.onComplete = { [weak self] profileIndex, triggerKeyCode in
+            guard let self else { return }
+            self.preferences.activeProfileIndex = profileIndex
+            self.preferences.triggerKeyCode = triggerKeyCode
+            try? self.prefsManager.save(self.preferences)
+            self.configureFromPreferences()
+
+            // Update menu state
+            for (i, item) in self.profileMenuItems.enumerated() {
+                item.state = i == profileIndex ? .on : .off
+            }
+            let keyName = ShortcutRecorder.keyName(for: triggerKeyCode)
+            self.triggerKeyMenuItem?.title = "Trigger Key: \(keyName)  ⌄"
+
+            self.hotkeyMonitor.start()
+            Task {
+                await self.autoDownloadModels()
+            }
+            self.onboardingWindow = nil
+        }
+        onboarding.show(permissionManager: permissionManager, preferences: preferences)
+        self.onboardingWindow = onboarding
     }
 
     /// Auto-download tiny.en and base.en on first launch. Warn for medium.en.
@@ -141,6 +213,16 @@ final class AavazApp: NSObject, NSApplicationDelegate {
         clipboardItem.target = self
         clipboardItem.state = preferences.restoreClipboard ? .on : .off
         settingsMenu.addItem(clipboardItem)
+
+        // Run Setup Again
+        settingsMenu.addItem(.separator())
+        let setupItem = NSMenuItem(
+            title: "Run Setup Again…",
+            action: #selector(runSetupAgain),
+            keyEquivalent: ""
+        )
+        setupItem.target = self
+        settingsMenu.addItem(setupItem)
 
         settingsItem.submenu = settingsMenu
         menu.addItem(settingsItem)
@@ -326,6 +408,11 @@ final class AavazApp: NSObject, NSApplicationDelegate {
         textInjector.restoreClipboard = preferences.restoreClipboard
         sender.state = preferences.restoreClipboard ? .on : .off
         try? prefsManager.save(preferences)
+    }
+
+    @objc private func runSetupAgain() {
+        hotkeyMonitor.stop()
+        showOnboarding()
     }
 
     @objc private func downloadCurrentModel() {

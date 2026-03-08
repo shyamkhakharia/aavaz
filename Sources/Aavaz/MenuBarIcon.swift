@@ -6,8 +6,7 @@ import AppKit
 /// Transcribing: circular dot spinner.
 /// Error: dimmed waveform with a small warning dot.
 enum MenuBarIcon {
-    /// Brand accent color matching the website (#6E6AE8).
-    static let accentColor = NSColor(red: 0x6E / 255.0, green: 0x6A / 255.0, blue: 0xE8 / 255.0, alpha: 1.0)
+    static let accentColor = DesignTokens.accent
 
     static func idle() -> NSImage {
         let image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "Aavaz")!
