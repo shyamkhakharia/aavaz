@@ -65,7 +65,8 @@ final class ShortcutRecorder {
 
         // Small delay so the user sees what they pressed, then dismiss before callback
         // (callback may release us, so dismiss first to clean up the event monitor)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(300))
             let callback = self?.onKeyRecorded
             self?.dismiss()
             callback?(keyCode, name)

@@ -206,7 +206,7 @@ final class AavazApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func startMenuRefreshTimer() {
         guard menuRefreshTimer == nil else { return }
         menuRefreshTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 self?.refreshDownloadUI()
             }
         }
@@ -510,7 +510,7 @@ final class AavazApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Start fast polling while menu is open so user sees live %
         guard !activeDownloads.isEmpty, menuOpenRefreshTimer == nil else { return }
         menuOpenRefreshTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 self?.refreshDownloadUI()
             }
         }
@@ -558,7 +558,7 @@ final class AavazApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         button.image = MenuBarIcon.recording(frame: 0)
 
         transcribeAnimationTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [weak self] _ in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 guard let self, let button = self.statusItem?.button else { return }
                 self.animationFrameIndex = (self.animationFrameIndex + 1) % MenuBarIcon.recordingFrameCount
                 button.image = MenuBarIcon.recording(frame: self.animationFrameIndex)
@@ -572,7 +572,7 @@ final class AavazApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         button.image = MenuBarIcon.transcribing(frame: 0)
 
         transcribeAnimationTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 guard let self, let button = self.statusItem?.button else { return }
                 self.animationFrameIndex = (self.animationFrameIndex + 1) % MenuBarIcon.transcribingFrameCount
                 button.image = MenuBarIcon.transcribing(frame: self.animationFrameIndex)
@@ -596,18 +596,20 @@ final class AavazApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         textInjector.restoreClipboard = preferences.restoreClipboard
 
         hotkeyMonitor.onDoubleTap = { [weak self] in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 self?.statusItem?.menu?.cancelTracking()
                 self?.toggleRecording()
             }
         }
         hotkeyMonitor.onCancel = { [weak self] in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 self?.cancelRecording()
             }
         }
         hotkeyMonitor.onStatusChange = { [weak self] status in
-            self?.updateStatus(status)
+            Task { @MainActor in
+                self?.updateStatus(status)
+            }
         }
     }
 
@@ -804,28 +806,30 @@ final class AavazApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let modelPath = modelManager.modelPath(for: modelName).path
         print("[Aavaz] transcribing with model: \(modelPath)")
 
-        Task.detached { [weak self] in
-            guard let self else { return }
+        // Capture non-isolated references before detaching
+        let transcriber = self.transcriber
+        let config = WhisperTranscriber.TranscriptionConfig(
+            modelPath: modelPath,
+            useVAD: profile.useVAD,
+            initialPrompt: profile.initialPrompt.isEmpty ? nil : profile.initialPrompt,
+            useCoreML: profile.useCoreML
+        )
 
-            let config = WhisperTranscriber.TranscriptionConfig(
-                modelPath: modelPath,
-                useVAD: profile.useVAD,
-                initialPrompt: profile.initialPrompt.isEmpty ? nil : profile.initialPrompt,
-                useCoreML: profile.useCoreML
-            )
-
+        Task.detached {
             do {
-                let text = try self.transcriber.transcribe(audioBuffer: audioBuffer, config: config)
+                let text = try transcriber.transcribe(audioBuffer: audioBuffer, config: config)
                 print("[Aavaz] transcription result: \"\(text)\"")
 
-                await MainActor.run {
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
                     self.isTranscribing = false
                     self.setIconState(.idle)
                     if text.isEmpty {
                         self.updateStatus("No speech detected")
                     } else {
                         print("[Aavaz] injecting text…")
-                        Task {
+                        Task { @MainActor [weak self] in
+                            guard let self else { return }
                             let injected = await self.textInjector.inject(text: text)
                             if injected {
                                 self.clearPermissionError()
@@ -840,7 +844,8 @@ final class AavazApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 }
             } catch {
                 print("[Aavaz] transcription error: \(error)")
-                await MainActor.run {
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
                     self.isTranscribing = false
                     self.setIconState(.idle)
                     self.updateStatus("Error: \(error.localizedDescription)")

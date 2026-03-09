@@ -190,7 +190,7 @@ final class OnboardingWindow {
 
         animationFrame = 0
         animationTimer = Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { [weak self] _ in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 guard let self else { return }
                 self.animationFrame += 1
                 let phase = self.animationFrame % 8
@@ -467,7 +467,7 @@ final class OnboardingWindow {
         let task = Task {
             do {
                 try await manager.downloadModel(modelName) { [weak self] progress in
-                    DispatchQueue.main.async {
+                    Task { @MainActor in
                         let btn = self?.modelButtons[modelName]
                         btn?.title = "\(Int(progress * 100))%"
                         btn?.progress = progress
@@ -533,7 +533,7 @@ final class OnboardingWindow {
         animationFrame = 0
         waveformView.image = makeLargeWaveform(frame: 0)
         animationTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [weak self] _ in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 guard let self, let view = self.contentView?.viewWithTag(200) as? NSImageView else { return }
                 self.animationFrame = (self.animationFrame + 1) % 8
                 view.image = self.makeLargeWaveform(frame: self.animationFrame)
@@ -702,7 +702,7 @@ final class OnboardingWindow {
 
     private func startPermissionPolling() {
         permissionPollTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 self?.refreshPermissionButtons()
             }
         }
