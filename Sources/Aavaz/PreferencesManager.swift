@@ -26,7 +26,7 @@ struct Preferences: Codable, Sendable {
             Profile(name: "Balanced", modelName: "base.en", useVAD: false, initialPrompt: "", injectionDelay: 0.1, useCoreML: false),
             Profile(name: "Quality", modelName: "medium.en", useVAD: false, initialPrompt: "", injectionDelay: 0.1, useCoreML: true),
         ],
-        activeProfileIndex: 0,
+        activeProfileIndex: 1,  // Balanced (recommended)
         triggerKeyCode: 61,  // Right Option
         doubleTapWindow: 0.4,
         restoreClipboard: true

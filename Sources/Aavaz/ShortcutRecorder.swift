@@ -63,10 +63,12 @@ final class ShortcutRecorder {
         let name = Self.keyName(for: keyCode)
         label?.stringValue = name
 
-        // Small delay so the user sees what they pressed
+        // Small delay so the user sees what they pressed, then dismiss before callback
+        // (callback may release us, so dismiss first to clean up the event monitor)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-            self?.onKeyRecorded?(keyCode, name)
+            let callback = self?.onKeyRecorded
             self?.dismiss()
+            callback?(keyCode, name)
         }
     }
 

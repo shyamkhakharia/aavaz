@@ -56,6 +56,8 @@ final class ModelManager: Sendable {
         let chunkSize = 256 * 1024 // 256KB write chunks
 
         for try await byte in bytes {
+            try Task.checkCancellation()
+
             buffer.append(byte)
 
             if buffer.count >= chunkSize {

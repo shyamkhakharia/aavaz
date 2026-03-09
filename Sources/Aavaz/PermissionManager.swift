@@ -41,7 +41,23 @@ final class PermissionManager {
         )
         if !trusted {
             // Also open System Settings so user can toggle it on
-            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+                NSWorkspace.shared.open(url)
+            }
         }
+    }
+
+    /// Resets the TCC entry for this app by removing and re-adding.
+    /// Useful after rebuilds that change the ad-hoc code signature.
+    func resetAndPromptAccessibility() {
+        // Remove stale entry via tccutil (resets for our bundle ID)
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
+        task.arguments = ["reset", "Accessibility", Bundle.main.bundleIdentifier ?? "com.aavaz.app"]
+        try? task.run()
+        task.waitUntilExit()
+
+        // Now re-prompt so macOS registers the new binary
+        promptAccessibility()
     }
 }

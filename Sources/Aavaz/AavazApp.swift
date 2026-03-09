@@ -44,9 +44,6 @@ final class AavazApp: NSObject, NSApplicationDelegate {
             showOnboarding()
         } else {
             hotkeyMonitor.start()
-            Task {
-                await autoDownloadModels()
-            }
         }
     }
 
@@ -101,48 +98,70 @@ final class AavazApp: NSObject, NSApplicationDelegate {
             try? self.prefsManager.save(self.preferences)
             self.configureFromPreferences()
 
-            // Update menu state
-            for (i, item) in self.profileMenuItems.enumerated() {
-                item.state = i == profileIndex ? .on : .off
-            }
-            let keyName = ShortcutRecorder.keyName(for: triggerKeyCode)
-            self.triggerKeyMenuItem?.title = "Trigger Key: \(keyName)  ⌄"
+            // Rebuild menu to reflect downloaded models and selected profile
+            self.rebuildMenu()
 
             self.hotkeyMonitor.start()
-            Task {
-                await self.autoDownloadModels()
-            }
+            self.updateStatus("Ready")
             self.onboardingWindow = nil
         }
-        onboarding.show(permissionManager: permissionManager, preferences: preferences)
+        onboarding.show(permissionManager: permissionManager, modelManager: modelManager, preferences: preferences)
         self.onboardingWindow = onboarding
     }
 
-    /// Auto-download tiny.en and base.en on first launch. Warn for medium.en.
-    private func autoDownloadModels() async {
-        let autoModels: [ModelManager.ModelName] = [.tinyEN, .baseEN]
-        for model in autoModels {
-            if !modelManager.isModelDownloaded(model) {
-                updateStatus("Downloading \(model.rawValue)…")
-                print("[Aavaz] Auto-downloading \(model.rawValue)")
-                do {
-                    try await modelManager.downloadModel(model) { [weak self] progress in
-                        DispatchQueue.main.async {
-                            self?.updateStatus("Downloading \(model.rawValue)… \(Int(progress * 100))%")
-                        }
+    private static let menuModelOrder: [ModelManager.ModelName] = [.tinyEN, .baseEN, .mediumEN]
+    private static let modelDisplayNames: [ModelManager.ModelName: String] = [
+        .tinyEN: "Fast",
+        .baseEN: "Balanced",
+        .mediumEN: "Quality",
+    ]
+
+    private static func displayName(for model: ModelManager.ModelName) -> String {
+        modelDisplayNames[model] ?? model.rawValue
+    }
+
+    @objc private func selectModelFromMenu(_ sender: NSMenuItem) {
+        let index = sender.tag
+        guard index >= 0, index < Self.menuModelOrder.count else { return }
+        preferences.activeProfileIndex = index
+        updateStatus("Using \(Self.displayName(for: Self.menuModelOrder[index])) model")
+        rebuildMenu()
+    }
+
+    @objc private func downloadModelFromMenu(_ sender: NSMenuItem) {
+        let index = sender.tag
+        guard index >= 0, index < Self.menuModelOrder.count else { return }
+        let modelName = Self.menuModelOrder[index]
+
+        guard !modelManager.isModelDownloaded(modelName) else { return }
+
+        updateStatus("Downloading \(Self.displayName(for: modelName)) model…")
+        Task {
+            do {
+                try await modelManager.downloadModel(modelName) { [weak self] progress in
+                    DispatchQueue.main.async {
+                        self?.updateStatus("Downloading \(Self.displayName(for: modelName)) model… \(Int(progress * 100))%")
                     }
-                    print("[Aavaz] Downloaded \(model.rawValue)")
-                } catch {
-                    print("[Aavaz] Failed to download \(model.rawValue): \(error)")
-                    updateStatus("Failed to download \(model.rawValue)")
                 }
+                // Auto-select after download
+                preferences.activeProfileIndex = index
+                updateStatus("Downloaded \(Self.displayName(for: modelName)) model")
+                rebuildMenu()
+            } catch {
+                updateStatus("Failed: \(error.localizedDescription)")
             }
         }
-        updateStatus("Ready")
     }
 
     private func setupMenuBar() {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        // Clear old menu item references
+        profileMenuItems.removeAll()
+        tapWindowMenuItems.removeAll()
+
+        if statusItem == nil {
+            statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        }
+        statusItem!.length = NSStatusItem.squareLength
         setIconState(.idle)
 
         let menu = NSMenu()
@@ -161,14 +180,20 @@ final class AavazApp: NSObject, NSApplicationDelegate {
         menu.addItem(profileHeader)
 
         for (index, profile) in preferences.profiles.enumerated() {
+            let modelName = Self.menuModelOrder[index]
+            let downloaded = modelManager.isModelDownloaded(modelName)
+            let suffix = downloaded ? "" : "  (not downloaded)"
             let item = NSMenuItem(
-                title: "  \(profile.name)",
+                title: "  \(profile.name)\(suffix)",
                 action: #selector(selectProfile(_:)),
                 keyEquivalent: ""
             )
             item.target = self
             item.tag = index
             item.state = index == preferences.activeProfileIndex ? .on : .off
+            if !downloaded {
+                item.state = .off
+            }
             menu.addItem(item)
             profileMenuItems.append(item)
         }
@@ -230,10 +255,36 @@ final class AavazApp: NSObject, NSApplicationDelegate {
 
         menu.addItem(.separator())
 
-        // Download model
-        let download = NSMenuItem(title: "Download Current Model…", action: #selector(downloadCurrentModel), keyEquivalent: "d")
-        download.target = self
-        menu.addItem(download)
+        // Models submenu
+        let modelsItem = NSMenuItem(title: "Models", action: nil, keyEquivalent: "")
+        let modelsMenu = NSMenu()
+
+        let modelEntries: [(ModelManager.ModelName, String, String)] = [
+            (.tinyEN, "Tiny", "~75 MB"),
+            (.baseEN, "Base", "~142 MB"),
+            (.mediumEN, "Medium", "~1.5 GB"),
+        ]
+        for (i, (modelName, label, size)) in modelEntries.enumerated() {
+            let downloaded = modelManager.isModelDownloaded(modelName)
+            let isActive = i == preferences.activeProfileIndex && downloaded
+            if downloaded {
+                let title = "\(label)  —  Ready"
+                let item = NSMenuItem(title: title, action: #selector(selectModelFromMenu(_:)), keyEquivalent: "")
+                item.target = self
+                item.tag = i
+                item.state = isActive ? .on : .off
+                modelsMenu.addItem(item)
+            } else {
+                let title = "\(label)  —  Download (\(size))"
+                let item = NSMenuItem(title: title, action: #selector(downloadModelFromMenu(_:)), keyEquivalent: "")
+                item.target = self
+                item.tag = i
+                modelsMenu.addItem(item)
+            }
+        }
+
+        modelsItem.submenu = modelsMenu
+        menu.addItem(modelsItem)
 
         // Grant Permissions (hidden by default, shown when needed)
         let permsItem = NSMenuItem(
@@ -253,6 +304,10 @@ final class AavazApp: NSObject, NSApplicationDelegate {
         menu.addItem(quit)
 
         statusItem?.menu = menu
+    }
+
+    private func rebuildMenu() {
+        setupMenuBar()
     }
 
     // MARK: - Icon States
@@ -348,7 +403,7 @@ final class AavazApp: NSObject, NSApplicationDelegate {
     // MARK: - Menu Actions
 
     @objc private func openAccessibilitySettings() {
-        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+        permissionManager.resetAndPromptAccessibility()
     }
 
     private func showPermissionError() {
@@ -364,6 +419,41 @@ final class AavazApp: NSObject, NSApplicationDelegate {
     @objc private func selectProfile(_ sender: NSMenuItem) {
         let index = sender.tag
         guard index >= 0, index < preferences.profiles.count else { return }
+
+        let modelName = Self.menuModelOrder[index]
+
+        // If model not downloaded, confirm download with user
+        if !modelManager.isModelDownloaded(modelName) {
+            let sizes: [ModelManager.ModelName: String] = [.tinyEN: "~75 MB", .baseEN: "~142 MB", .mediumEN: "~1.5 GB"]
+            let size = sizes[modelName] ?? ""
+            let alert = NSAlert()
+            alert.messageText = "Download Required"
+            alert.informativeText = "The \(preferences.profiles[index].name) profile needs to download its model (\(size)). Download now?"
+            alert.addButton(withTitle: "Download")
+            alert.addButton(withTitle: "Cancel")
+            alert.alertStyle = .informational
+
+            let response = alert.runModal()
+            guard response == .alertFirstButtonReturn else { return }
+
+            updateStatus("Downloading \(Self.displayName(for: modelName)) model…")
+            Task {
+                do {
+                    try await modelManager.downloadModel(modelName) { [weak self] progress in
+                        DispatchQueue.main.async {
+                            self?.updateStatus("Downloading \(Self.displayName(for: modelName)) model… \(Int(progress * 100))%")
+                        }
+                    }
+                    preferences.activeProfileIndex = index
+                    try? prefsManager.save(preferences)
+                    updateStatus("Using \(Self.displayName(for: modelName)) model")
+                    rebuildMenu()
+                } catch {
+                    updateStatus("Failed: \(error.localizedDescription)")
+                }
+            }
+            return
+        }
 
         preferences.activeProfileIndex = index
         try? prefsManager.save(preferences)
@@ -414,44 +504,6 @@ final class AavazApp: NSObject, NSApplicationDelegate {
     @objc private func runSetupAgain() {
         hotkeyMonitor.stop()
         showOnboarding()
-    }
-
-    @objc private func downloadCurrentModel() {
-        let profile = preferences.activeProfile
-        guard let modelName = ModelManager.ModelName(rawValue: profile.modelName) else { return }
-
-        if modelManager.isModelDownloaded(modelName) {
-            updateStatus("Model already downloaded")
-            return
-        }
-
-        // Warn for large models
-        if modelName == .mediumEN {
-            let alert = NSAlert()
-            alert.messageText = "Download medium.en model?"
-            alert.informativeText = "This model is ~1.5 GB and will take a while to download. It provides the highest quality transcription."
-            alert.alertStyle = .informational
-            alert.addButton(withTitle: "Download")
-            alert.addButton(withTitle: "Cancel")
-            if alert.runModal() != .alertFirstButtonReturn {
-                return
-            }
-        }
-
-        updateStatus("Downloading \(profile.modelName)…")
-
-        Task {
-            do {
-                try await modelManager.downloadModel(modelName) { [weak self] progress in
-                    DispatchQueue.main.async {
-                        self?.updateStatus("Downloading \(profile.modelName)… \(Int(progress * 100))%")
-                    }
-                }
-                updateStatus("Download complete")
-            } catch {
-                updateStatus("Download failed: \(error.localizedDescription)")
-            }
-        }
     }
 
     // MARK: - Recording
