@@ -8,12 +8,19 @@ on:
 
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: macos-latest
     steps:
       - name: Checkout with submodules
         uses: actions/checkout@v4
         with:
           submodules: recursive
+
+      - name: Show build environment
+        run: |
+          sw_vers
+          xcodebuild -version
+          xcrun --sdk macosx --show-sdk-version
+          swift --version
 
       - name: Build whisper.cpp
         run: bash scripts/build-whisper.sh Release

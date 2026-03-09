@@ -23,6 +23,12 @@ final class OnboardingWindow {
 
     // Callbacks
     var onComplete: ((_ profileIndex: Int, _ triggerKeyCode: UInt16) -> Void)?
+    /// Called when onboarding finishes with still-active downloads so the app can track them
+    var onHandoffDownloads: ((_ downloads: [ModelManager.ModelName: Task<Void, Never>]) -> Void)?
+    /// Called during downloads so the app can track progress even while onboarding is open
+    var onDownloadProgress: ((_ model: ModelManager.ModelName, _ progress: Double) -> Void)?
+    /// Called when a download completes
+    var onDownloadComplete: ((_ model: ModelManager.ModelName) -> Void)?
 
     // References for permission buttons
     private var micButton: AccentButton?
@@ -465,6 +471,7 @@ final class OnboardingWindow {
                         let btn = self?.modelButtons[modelName]
                         btn?.title = "\(Int(progress * 100))%"
                         btn?.progress = progress
+                        self?.onDownloadProgress?(modelName, progress)
                     }
                 }
                 activeDownloads.remove(modelName)
@@ -475,6 +482,7 @@ final class OnboardingWindow {
                 btn?.enabled = false
                 btn?.alphaValue = 0.5
                 modelStatusLabels[modelName]?.stringValue = ""
+                onDownloadComplete?(modelName)
                 updateReadyDownloadStatus()
             } catch {
                 activeDownloads.remove(modelName)
@@ -614,6 +622,26 @@ final class OnboardingWindow {
     }
 
     @objc private func nextStep() {
+        // On the models page, require at least one model downloaded or downloading
+        if currentStep == 2 {
+            let selectedModel = Self.modelOrder[selectedProfileIndex]
+            let isDownloaded = modelManager?.isModelDownloaded(selectedModel) ?? false
+            let isDownloading = activeDownloads.contains(selectedModel)
+            if !isDownloaded && !isDownloading {
+                // Shake the Continue button to hint the user needs to download
+                if let container = contentView {
+                    for sub in container.subviews {
+                        if let btn = sub as? AccentButton, btn.title == "Continue" {
+                            let anim = CAKeyframeAnimation(keyPath: "position.x")
+                            anim.values = [0, -8, 8, -6, 6, -3, 3, 0].map { btn.layer!.position.x + $0 }
+                            anim.duration = 0.4
+                            btn.layer?.add(anim, forKey: "shake")
+                        }
+                    }
+                }
+                return
+            }
+        }
         showStep(currentStep + 1)
     }
 
@@ -658,6 +686,10 @@ final class OnboardingWindow {
     @objc private func finish() {
         stopAnimation()
         Self.markComplete()
+        // Hand off any still-running downloads to the app
+        if !downloadTasks.isEmpty {
+            onHandoffDownloads?(downloadTasks)
+        }
         onComplete?(selectedProfileIndex, selectedKeyCode)
         panel?.close()
         panel = nil

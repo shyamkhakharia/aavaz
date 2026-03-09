@@ -10,7 +10,11 @@ VERSION="0.1.0"
 BUILD_DIR="$PROJECT_ROOT/.build/release"
 APP_DIR="$PROJECT_ROOT/build/${APP_NAME}.app"
 
-echo "Building release binary..."
+# Deployment target — minimum macOS version supported
+MIN_DEPLOY_TARGET="15.0"
+export MACOSX_DEPLOYMENT_TARGET="$MIN_DEPLOY_TARGET"
+
+echo "Building release binary (deployment target: $MIN_DEPLOY_TARGET)..."
 cd "$PROJECT_ROOT"
 swift build -c release 2>&1
 
@@ -59,7 +63,7 @@ cat > "$APP_DIR/Contents/Info.plist" << PLIST
     <key>LSUIElement</key>
     <true/>
     <key>LSMinimumSystemVersion</key>
-    <string>15.0</string>
+    <string>${MIN_DEPLOY_TARGET}</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Aavaz needs microphone access to record your voice for transcription.</string>
     <key>NSPrincipalClass</key>
