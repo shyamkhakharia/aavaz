@@ -153,7 +153,7 @@ final class AudioRecorder {
         return collector.drain()
     }
 
-    static func requestMicrophoneAccess() async -> Bool {
+    nonisolated static func requestMicrophoneAccess() async -> Bool {
         await withCheckedContinuation { continuation in
             AVCaptureDevice.requestAccess(for: .audio) { granted in
                 continuation.resume(returning: granted)
