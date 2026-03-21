@@ -768,7 +768,7 @@ final class AavazApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
             isRecording = true
             setIconState(.recording)
             updateStatus("Recording…")
-            playSound("Tink")
+            playSound("Submarine")
             print("[Aavaz] doStartRecording: recording started")
         } catch {
             updateStatus("Recording failed: \(error.localizedDescription)")
@@ -783,7 +783,7 @@ final class AavazApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let audioBuffer = audioRecorder.stopRecording()
         isRecording = false
         setIconState(.idle)
-        playSound("Pop")
+        playSound("Submarine")
 
         print("[Aavaz] stopRecording: got \(audioBuffer.count) samples (\(String(format: "%.1f", Double(audioBuffer.count) / 16000.0))s of audio)")
 
